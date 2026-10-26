@@ -64,7 +64,7 @@
     - **vulnerable** mode obeys instructions in order notes, skips ownership checks, echoes customer data and claims success after errors;
     - **hardened** mode does the opposite;
   - the two Dockerfiles, pinned to a base digest, running as a non-root user.
-- **Files:** `sandbox_images/gateway/{Dockerfile,gateway.py,store.py,tools.py}`, `sandbox_images/refundbot/{Dockerfile,refundbot.py}`, `seeds/synthetic_store.json`, `tests/unit/test_gateway_tools.py`
+- **Files:** `sandbox_images/gateway/{Dockerfile,bbj_gateway/*.py}`, `sandbox_images/refundbot/{Dockerfile,bbj_refundbot/*.py}`, `seeds/synthetic_store.json`, `scripts/sandbox_smoke.sh`, `tests/unit/sandbox_images/*.py`. (The stdlib-only packages replace the single-file layout originally listed, so the code can be unit-tested and type-checked.)
 - **Dependencies:** Phase 1.
 - **Tests:**
   - the tools behave correctly on the seed data;

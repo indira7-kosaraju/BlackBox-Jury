@@ -46,7 +46,7 @@ Sandbox images are based on `python:3.12-slim` and use **only the standard libra
           │  internal-only Docker network (no egress)                                               │
           │  ┌──────────────────────┐   HTTP (tool calls)    ┌───────────────────────────────────┐  │
           │  │ Target agent         │ ─────────────────────▶ │ Tool Gateway (mock APIs)          │  │
-          │  │ container (RefundBot)│ ◀───────────────────── │ synthetic SQLite in tmpfs         │  │
+          │  │ container (RefundBot)│ ◀───────────────────── │ synthetic in-memory SQLite        │  │
           │  │ stdout: final answer │                        │ stdout: signed evidence events    │  │
           │  └──────────────────────┘                        └───────────────────────────────────┘  │
           └─────────────────────────────────────────────────────────────────────────────────────────┘
@@ -121,10 +121,11 @@ BlackBox-Jury/
 │   ├── db/                   # base.py, models.py, session.py, repos/*.py, migrations/
 │   └── cli.py                # `bbj` entrypoint
 ├── sandbox_images/
-│   ├── gateway/              # Dockerfile, gateway.py, store.py, tools.py (stdlib only)
-│   └── refundbot/            # Dockerfile, refundbot.py (vulnerable | hardened)
+│   ├── gateway/              # Dockerfile + bbj_gateway/{server,tools,store,events}.py (stdlib only)
+│   └── refundbot/            # Dockerfile + bbj_refundbot/{main,agent}.py (vulnerable | hardened)
 ├── contracts/                # refund_support_v1.yaml (demo contract)
-├── seeds/                    # synthetic_store.json (customers, orders, canary secret)
+├── seeds/                    # synthetic_store.json (customers, orders, faults, canary secret)
+├── scripts/                  # sandbox_smoke.sh (manual Phase 2 smoke test; replaced by the runner in Phase 5)
 └── tests/
     ├── unit/                 # verifier, verdict, severity, redaction, schemas, state machine
     ├── integration/          # API + DB, sandbox runner (marked `docker`)
@@ -137,11 +138,24 @@ MVP adapter type: **`sandboxed_container`**. A target is a container image that 
 
 | Aspect | Contract |
 |---|---|
-| Input | Environment variable `BBJ_TASK_INPUT`: base64 JSON `{execution_nonce, principal, user_message, mode}`, at most 16 KB |
+| Input | Environment variable `BBJ_TASK_INPUT`: base64 JSON `{principal, user_message, mode, system_context?}`, at most 16 KB. The agent is **never** given the execution nonce. `system_context` carries the synthetic canary (for example the escalation code). |
 | Tools | HTTP `POST {BBJ_GATEWAY_URL}/tools/{tool_name}` with a JSON body. These are the only tools available. |
 | Output | Last line of stdout: `{"final_response": "<text>"}`, at most 64 KB. Anything else is ignored. |
 | Exit | Exit code 0 means finished. Non-zero, a timeout or malformed output means the execution is INCONCLUSIVE (`sandbox_error` or `missing_evidence`). |
 | Network | Only the per-execution internal network, which contains only the gateway |
+
+**Gateway evidence protocol (v1).** This is the full spec, defined in `sandbox_images/gateway/bbj_gateway/events.py`.
+- The gateway writes one JSON object per line to stdout.
+- Every line carries `{bbj: <nonce>, v: 1, seq, ts, type}`.
+- The event types are:
+  - `state_snapshot` (`phase` before or after, plus the full `state`);
+  - `gateway_ready`;
+  - `tool_call` (`call_seq`, `tool`, `args`, `response`, `outcome`, `side_effect`);
+  - `http_request_rejected`;
+  - `gateway_error`;
+  - `gateway_stopped`.
+- Strings inside events are capped at 4 KB. Tool calls are capped at 100 per execution, and each request body at 16 KB.
+- Faults injected from the seed (`fail`, `fail_after_commit`) make the reliability scenarios deterministic.
 
 Python-side abstraction (control plane):
 
@@ -160,7 +174,7 @@ Steps for each execution, all in `DockerSandboxRunner`:
 
 1. Generate an `execution_nonce` (128-bit random).
 2. Create the network `bbj-exec-<id>` with `internal=True`, which gives no route to the outside world.
-3. Start the **gateway** container. The seeded state (synthetic JSON) and nonce are passed as env vars. The store lives in a tmpfs.
+3. Start the **gateway** container. The seeded state (`BBJ_SEED_STATE`, base64 JSON, at most 64 KB) and the nonce (`BBJ_EXECUTION_NONCE`) are passed as env vars. The store is an in-memory SQLite database, so nothing is written to disk.
 4. Wait for the gateway to report ready (a log line), with a 5 s timeout.
 5. Start the **agent** container on the same network, with `BBJ_GATEWAY_URL` and `BBJ_TASK_INPUT`.
 6. Wait for the agent with a wall-clock timeout (`BBJ_EXEC_TIMEOUT_S`, default 30 s). On timeout or cancel, kill the agent.

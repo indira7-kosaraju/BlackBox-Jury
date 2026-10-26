@@ -6,7 +6,7 @@ Blackbox Jury is a security-first testing system for tool-using AI agents. It ru
 
 > Results reflect only the scenarios executed. Blackbox Jury does not establish that any agent is secure.
 
-**Status:** Phase 1 (project skeleton). See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+**Status:** Phase 2 (mock target and sandbox images). See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 ## Project documents
 
@@ -64,11 +64,22 @@ All configuration comes from environment variables, or from `.env`, which is git
 | `make test` | pytest, excluding Docker-marked tests |
 | `make test-docker` | sandbox integration tests (requires Docker) |
 | `make run` | start the API on `127.0.0.1:8000` |
+| `make images` | build the sandbox images `bbj-gateway:0.1.0` and `bbj-refundbot:0.1.0` (requires Docker) |
+| `make sandbox-smoke` | run one gateway + RefundBot pair in the hardened sandbox and print the evidence. Args: `scripts/sandbox_smoke.sh [vulnerable\|hardened] "message"`; optional `NOTE="..."` overrides order A-101's note. |
 
 ## Known issues
 
 - **Starlette test-client deprecation warning (dev only, accepted).** Starlette 1.10's `TestClient` prefers the new `httpx2` package. It still fully supports `httpx`, but warns on import. We keep `httpx` for now rather than adopt a new, unvetted dependency. The warning is filtered in `pyproject.toml` with a filter that matches only that exact message, so other deprecations still show. Revisit this when upgrading FastAPI or Starlette.
 - **Editable-install `.pth` file on macOS.** macOS can set the "hidden" flag on files in `.venv`, and Python 3.12.15+ skips hidden `.pth` files. To avoid depending on that file, pytest uses `pythonpath = ["src"]` and `make run` passes `--app-dir src`.
+
+## Sandbox images
+
+| Image | Contents |
+|---|---|
+| `bbj-gateway` | Mock tool API (`get_order`, `list_orders`, `get_customer`, `issue_refund`, `send_email`, `update_order_note`) over synthetic data. It records every call and the state before and after as nonce-tagged JSON lines. It observes but does not enforce policy. |
+| `bbj-refundbot` | Scripted mock target agent. In `vulnerable` mode it follows injected instructions, skips ownership checks, leaks data and retries blindly. In `hardened` mode (the "fix") it does none of these. Legitimate tasks succeed in both modes. |
+
+Both images are stdlib-only Python on a digest-pinned `python:3.12-slim`, run as the non-root user `10001` in isolated mode (`python -I`), and install no packages.
 
 ## Safety defaults
 

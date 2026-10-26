@@ -34,7 +34,9 @@ select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "N"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src"]
+files = ["src", "sandbox_images/gateway/bbj_gateway", "sandbox_images/refundbot/bbj_refundbot"]
+mypy_path = ["src", "sandbox_images/gateway", "sandbox_images/refundbot"]
+explicit_package_bases = true
 plugins = ["pydantic.mypy"]
 
 [tool.pydantic-mypy]
@@ -46,7 +48,7 @@ warn_required_dynamic_aliases = true
 testpaths = ["tests"]
 # Import from src/ directly; do not depend on the editable-install .pth file
 # (macOS may flag it hidden, and Python 3.12.15+ skips hidden .pth files).
-pythonpath = ["src"]
+pythonpath = ["src", "sandbox_images/gateway", "sandbox_images/refundbot"]
 filterwarnings = [
     # Known, accepted: Starlette 1.10's TestClient prefers the new `httpx2` package
     # but still fully supports `httpx` (it falls back and warns). Switching means
