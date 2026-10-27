@@ -220,10 +220,9 @@ The full evidence view for one execution:
 ```
 All text is redacted. Artifact contents come from `GET /artifacts/{id}`, which returns `{kind, content_redacted, sha256, truncated}`.
 
-### `GET /runs/{id}/report?format=json`
-*(Phase 6: JSON only. `format=html` arrives in Phase 9 and is rejected until then.)*
+### `GET /runs/{id}/report?format=json|html`
 - `json` is the default. It returns the report model from PRD FR26: summary, totals, findings, benign controls, retest comparison, limitations and disclaimer.
-- `html` returns the static report described in DESIGN.md, with `Content-Type: text/html`. All untrusted content is escaped, and the response carries `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'`.
+- `html` returns the static report described in DESIGN.md, with `Content-Type: text/html`. All untrusted content is escaped (Jinja2 autoescape), the page has no scripts or external resources, and the response carries `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`.
 - A report requested while the run is still active is `partial: true`.
 
 ---

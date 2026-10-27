@@ -7,7 +7,7 @@ from collections.abc import Callable
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Header, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from blackbox_jury.api.deps import DB, DefaultLimited, Principal, RunCreateLimited
@@ -19,6 +19,7 @@ from blackbox_jury.db.models import Contract, Run, ScenarioRow, Target
 from blackbox_jury.db.session import Database
 from blackbox_jury.evidence.collector import canonical_json, sha256_hex
 from blackbox_jury.reports.builder import build_report, execution_view
+from blackbox_jury.reports.render import CONTENT_SECURITY_POLICY, render_html
 from blackbox_jury.scenarios.loader import SUITES, ScenarioError, validate_against
 
 router = APIRouter()
@@ -306,12 +307,17 @@ def get_finding(finding_id: str, principal: DefaultLimited, db: DB) -> dict[str,
         }
 
 
-@router.get("/runs/{run_id}/report")
+@router.get("/runs/{run_id}/report", response_model=None)
 def get_report(
     run_id: str,
     principal: DefaultLimited,
     db: DB,
-    format: Literal["json"] = Query(default="json"),  # HTML report arrives in Phase 9
-) -> dict[str, Any]:
+    format: Literal["json", "html"] = Query(default="json"),
+) -> dict[str, Any] | HTMLResponse:
     with db.session() as s:
-        return build_report(s, repo.get_run(s, principal.project_id, run_id))
+        report = build_report(s, repo.get_run(s, principal.project_id, run_id))
+    if format == "html":
+        return HTMLResponse(
+            render_html(report), headers={"Content-Security-Policy": CONTENT_SECURITY_POLICY}
+        )
+    return report

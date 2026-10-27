@@ -22,6 +22,7 @@ import typer
 from blackbox_jury.core.config import get_settings
 from blackbox_jury.db.seed import seed as seed_db
 from blackbox_jury.db.session import Database, upgrade
+from blackbox_jury.reports.render import render_html
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help="Blackbox Jury CLI")
 db_app = typer.Typer(no_args_is_help=True, help="Database commands")
@@ -192,6 +193,8 @@ def _finish(api: str, run_id: str, status: dict[str, Any], as_json: bool) -> Non
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     path = REPORTS_DIR / f"{run_id}.json"
     path.write_text(json.dumps(report, indent=2))
+    html_path = REPORTS_DIR / f"{run_id}.html"
+    html_path.write_text(render_html(report))
     t = status["totals"]
     if as_json:
         _echo(json.dumps({"run": status, "report_path": str(path)}))
@@ -203,6 +206,7 @@ def _finish(api: str, run_id: str, status: dict[str, Any], as_json: bool) -> Non
     )
     _echo(report["disclaimer"])
     _echo(f"report: {path}")
+    _echo(f"html report: {html_path}")
 
 
 @app.command()
@@ -216,14 +220,18 @@ def status(run_id: str, api: ApiOpt = DEFAULT_API) -> None:
 
 @app.command()
 def report(
-    run_id: str, out: Annotated[Path | None, typer.Option()] = None, api: ApiOpt = DEFAULT_API
+    run_id: str,
+    out: Annotated[Path | None, typer.Option()] = None,
+    html: Annotated[bool, typer.Option("--html", help="Render the static HTML report")] = False,
+    api: ApiOpt = DEFAULT_API,
 ) -> None:
-    """Fetch the JSON report for a run."""
+    """Fetch a run's report (JSON by default, or static HTML with --html)."""
     try:
-        data = json.dumps(_api(api, "GET", f"/runs/{run_id}/report"), indent=2)
+        payload = _api(api, "GET", f"/runs/{run_id}/report")
     except ApiCallError as exc:
         _fail(exc)
         return
+    data = render_html(payload) if html else json.dumps(payload, indent=2)
     if out:
         out.write_text(data)
         _echo(f"report: {out}")

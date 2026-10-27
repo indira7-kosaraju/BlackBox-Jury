@@ -227,6 +227,11 @@
   - empty and partial states;
   - there is no "secure" wording.
 - **Acceptance:** the report is readable at 375 px and on desktop, works in both themes, and the keyboard can reach every `<details>` element.
+- **Done (Phase 9):**
+  - `reports/templates/report.html.j2` with Jinja2 autoescape and no scripts or external resources, served with a strict CSP.
+  - `bbj run` writes `reports/out/<run>.html`, and `bbj report --html` renders one on demand.
+  - Tests cover escaping, CSP, states, the retest section and accessibility markup.
+  - **Not yet verified:** rendering at 375 px and in both themes has not been checked in a browser.
 
 ## Phase 10: End-to-end validation and demo rehearsal · **Must** · ~7 h
 - **Goal:** prove it works and get demo-ready.

@@ -8,6 +8,7 @@ report never says the target is secure.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from typing import Any
 
@@ -31,6 +32,59 @@ LIMITATIONS = [
 ]
 
 
+_PK = {
+    "customers": "customer_id",
+    "orders": "order_id",
+    "refunds": "refund_id",
+    "approvals": "approval_id",
+    "outbox": "message_id",
+}
+
+
+def state_diff(before: dict[str, Any], after: dict[str, Any]) -> list[dict[str, Any]]:
+    """Row-level diff of two redacted snapshots: ``+`` added, ``-`` removed, ``~`` changed."""
+    rows: list[dict[str, Any]] = []
+    for table, pk in _PK.items():
+        old = {r.get(pk): r for r in before.get(table, []) if isinstance(r, dict)}
+        new = {r.get(pk): r for r in after.get(table, []) if isinstance(r, dict)}
+        for key in sorted(set(old) | set(new), key=str):
+            if key not in old:
+                rows.append(
+                    {"table": table, "key": key, "change": "+", "before": None, "after": new[key]}
+                )
+            elif key not in new:
+                rows.append(
+                    {"table": table, "key": key, "change": "-", "before": old[key], "after": None}
+                )
+            elif old[key] != new[key]:
+                changed = {
+                    k: new[key].get(k) for k in new[key] if old[key].get(k) != new[key].get(k)
+                }
+                rows.append(
+                    {
+                        "table": table,
+                        "key": key,
+                        "change": "~",
+                        "before": {k: old[key].get(k) for k in changed},
+                        "after": changed,
+                    }
+                )
+    return rows
+
+
+def _states(s: Session, execution_id: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    found: dict[str, dict[str, Any]] = {}
+    for art in repo.artifacts(s, execution_id):
+        if art.kind in ("state_before", "state_after") and not art.truncated:
+            try:
+                value = json.loads(art.content_redacted)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, dict):
+                found[art.kind] = value
+    return found.get("state_before"), found.get("state_after")
+
+
 def _claim(s: Session, execution_id: str) -> dict[str, Any] | None:
     for art in repo.artifacts(s, execution_id):
         if art.kind == "agent_final_response":
@@ -40,6 +94,11 @@ def _claim(s: Session, execution_id: str) -> dict[str, Any] | None:
                 "text": art.content_redacted,
             }
     return None
+
+
+def _diff_or_none(s: Session, execution_id: str) -> list[dict[str, Any]] | None:
+    before, after = _states(s, execution_id)
+    return state_diff(before, after) if before is not None and after is not None else None
 
 
 def execution_view(s: Session, exe: Execution, scenario: ScenarioRow) -> dict[str, Any]:
@@ -86,6 +145,7 @@ def execution_view(s: Session, exe: Execution, scenario: ScenarioRow) -> dict[st
             }
             for c in checks
         ],
+        "state_diff": _diff_or_none(s, exe.id),
         "evidence_problems": exe.evidence_problems or [],
         "jury": [],  # Phase 7: MODEL_ANALYSIS, advisory only
     }

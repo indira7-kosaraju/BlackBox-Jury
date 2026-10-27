@@ -1,0 +1,243 @@
+{#- Blackbox Jury run report (DESIGN.md). Autoescaped; no external resources. -#}
+{%- set BADGE = {"CONFIRMED": "■ CONFIRMED", "NOT_REPRODUCED": "○ NOT REPRODUCED", "INCONCLUSIVE": "◐ INCONCLUSIVE"} -%}
+{%- macro verdict(v, reason=None) -%}
+  {%- if v -%}<span class="badge v-{{ v|lower }}">{{ BADGE[v] }}{% if reason %} — {{ reason }}{% endif %}</span>
+  {%- else -%}<span class="badge">… pending</span>{%- endif -%}
+{%- endmacro -%}
+{%- macro sev(s) -%}{% if s %}<span class="chip sev-{{ s }}">{{ s|upper }}</span>{% else %}—{% endif %}{%- endmacro -%}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Blackbox Jury Report — {{ report.run.id }}</title>
+<style>
+:root {
+  --bg:#FAFAF8; --surface:#FFFFFF; --text:#1B1D21; --muted:#5B616B; --border:#DADCE0;
+  --confirmed:#B42318; --not-reproduced:#2E6B4F; --inconclusive:#9A6700;
+  --verified:#1F4E8C; --model:#6B4FA0; --claim:#5B616B;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#15171A; --surface:#1D2024; --text:#E6E7E9; --muted:#9BA1AA; --border:#33373D;
+    --confirmed:#F97066; --not-reproduced:#6CC79A; --inconclusive:#E3B341;
+    --verified:#7AA7E6; --model:#B39DDB; --claim:#9BA1AA;
+  }
+}
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text);
+  font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+code, pre, .mono { font-family: ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; }
+pre { white-space:pre-wrap; overflow-wrap:anywhere; margin:0; }
+main, header .inner { max-width:1080px; margin:0 auto; padding:0 16px; }
+@media (min-width:768px) { main, header .inner { padding:0 24px; } }
+header { position:sticky; top:0; background:var(--surface); border-bottom:1px solid var(--border); z-index:1; }
+header .inner { display:flex; flex-wrap:wrap; gap:4px 16px; align-items:center; min-height:48px; }
+header strong { font-size:16px; }
+nav a { color:var(--text); margin-right:12px; }
+a:focus, summary:focus { outline:2px solid var(--verified); outline-offset:2px; }
+.skip { position:absolute; left:-999px; }
+.skip:focus { left:16px; top:8px; background:var(--surface); padding:4px 8px; z-index:2; }
+h1 { font-size:20px; margin:24px 0 8px; } h2 { font-size:16px; margin:32px 0 8px; } h3 { font-size:14px; margin:16px 0 8px; }
+section { margin-bottom:24px; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:16px; margin:12px 0; }
+.muted { color:var(--muted); }
+.disclaimer { border-left:4px solid var(--inconclusive); padding:8px 12px; background:var(--surface); }
+.banner { border:1px solid var(--inconclusive); padding:8px 12px; margin:12px 0; }
+.badge { font-weight:600; white-space:nowrap; }
+.v-confirmed { color:var(--confirmed); } .v-not_reproduced { color:var(--not-reproduced); }
+.v-inconclusive { color:var(--inconclusive); }
+.chip { border:1px solid currentColor; border-radius:4px; padding:0 6px; font-size:12px; font-weight:600; }
+.sev-critical,.sev-high { color:var(--confirmed); } .sev-medium,.sev-low { color:var(--inconclusive); }
+.tablewrap { overflow-x:auto; }
+table { border-collapse:collapse; width:100%; }
+th, td { text-align:left; vertical-align:top; padding:6px 8px; border-bottom:1px solid var(--border); }
+th { font-weight:600; }
+.bar { display:flex; height:12px; border:1px solid var(--border); border-radius:3px; overflow:hidden; margin:8px 0; }
+.bar span { display:block; height:100%; }
+.bar .k-CONFIRMED { background:var(--confirmed); } .bar .k-NOT_REPRODUCED { background:var(--not-reproduced); }
+.bar .k-INCONCLUSIVE { background:var(--inconclusive); }
+.prov { display:inline-block; font-size:12px; font-weight:700; letter-spacing:.03em; }
+.verified { border-left:4px solid var(--verified); padding-left:12px; }
+.claim { border-left:4px solid var(--claim); padding-left:12px; }
+.model { border-left:4px dashed var(--model); padding-left:12px; }
+.prov-verified { color:var(--verified); } .prov-claim { color:var(--claim); } .prov-model { color:var(--model); }
+.cols { display:grid; gap:12px; grid-template-columns:1fr; }
+@media (min-width:768px) { .cols { grid-template-columns:1fr 1fr; } }
+details { border:1px solid var(--border); border-radius:4px; padding:4px 8px; margin:4px 0; }
+summary { cursor:pointer; }
+ol, ul { padding-left:20px; }
+@media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#findings">Skip to findings</a>
+<header><div class="inner">
+  <strong>Blackbox Jury</strong>
+  <nav aria-label="Report sections">
+    <a href="#summary">Summary</a><a href="#findings">Findings</a><a href="#controls">Controls</a>
+    {% if report.retest_comparison %}<a href="#retest">Retest</a>{% endif %}<a href="#limitations">Limitations</a>
+  </nav>
+</div></header>
+<main>
+<section id="summary" aria-labelledby="h-summary">
+  <h1 id="h-summary">Run report <span class="mono muted">{{ report.run.id }}</span></h1>
+  {% if report.partial %}<p class="banner" role="status">Run in progress — partial report. Pending scenarios are listed as pending.</p>{% endif %}
+  {% if report.run.status in ("failed", "cancelled", "timed_out") %}
+  <p class="banner" role="status">Run {{ report.run.status }}{% if report.run.status_reason %} ({{ report.run.status_reason }}){% endif %}. Affected scenarios are INCONCLUSIVE.</p>
+  {% endif %}
+  <p class="disclaimer"><strong>{{ report.disclaimer }}</strong>{% if report.synthetic %} All data is synthetic.{% endif %}</p>
+  <div class="card">
+    <div class="tablewrap"><table>
+      <tr><th scope="row">Target</th><td>{{ report.target.name }} · <span class="mono">{{ report.target.image }}</span> · mode <strong>{{ report.target.mode }}</strong> · config v{{ report.target.config_version }}</td></tr>
+      <tr><th scope="row">Contract</th><td>{{ report.contract.name }} v{{ report.contract.version }} <span class="mono muted">sha256 {{ report.contract.sha256[:16] }}…</span></td></tr>
+      <tr><th scope="row">Run</th><td>{{ report.run.kind }} · {{ report.run.status }} · started {{ report.run.started_at or "—" }} · finished {{ report.run.finished_at or "—" }} (UTC)</td></tr>
+    </table></div>
+    <p><strong>Scenarios selected {{ report.totals.selected }} · Executed {{ report.totals.executed }}</strong>
+      · CONFIRMED {{ report.totals.CONFIRMED }} · NOT REPRODUCED {{ report.totals.NOT_REPRODUCED }} · INCONCLUSIVE {{ report.totals.INCONCLUSIVE }}
+      {% if report.totals.pending %} · <strong>not executed {{ report.totals.pending }}</strong>{% endif %}</p>
+    {% if report.totals.executed %}
+    <div class="bar" role="img" aria-label="Verdicts of executed scenarios: {% for b in bar %}{{ b.label }} {{ b.count }}{% if not loop.last %}, {% endif %}{% endfor %}">
+      {% for b in bar %}{% if b.count %}<span class="k-{{ b.key }}" style="width:{{ b.pct }}%"></span>{% endif %}{% endfor %}
+    </div>
+    <p class="muted">Bar: share of executed scenarios per verdict (count / executed).</p>
+    {% else %}<p>No scenarios were executed.</p>{% endif %}
+  </div>
+</section>
+
+<section id="findings" aria-labelledby="h-findings">
+  <h2 id="h-findings">Findings</h2>
+  {% if not report.findings %}
+    <p>No violations observed in {{ report.totals.executed }} executed scenario{{ "" if report.totals.executed == 1 else "s" }}.</p>
+  {% else %}
+  <div class="tablewrap"><table>
+    <thead><tr><th scope="col">Severity</th><th scope="col">Verdict</th><th scope="col">Finding</th><th scope="col">Failed checks</th></tr></thead>
+    <tbody>
+    {% for f in report.findings %}
+      <tr><td>{{ sev(f.severity) }}</td><td>{{ verdict(f.verdict) }}</td>
+        <td><a href="#{{ f.id }}">{{ f.title }}</a></td><td class="mono">{{ f.failed_checks|join(", ") }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+
+  {% for f in report.findings %}{% set e = f.execution %}
+  <article class="card" id="{{ f.id }}" aria-labelledby="t-{{ f.id }}">
+    <h3 id="t-{{ f.id }}">{{ f.title }}</h3>
+    <p>{{ verdict(f.verdict, e.inconclusive_reason) }} {{ sev(f.severity) }}
+      <span class="muted">· rule-based severity (PRD FR24) · scenario <span class="mono">{{ e.scenario.key }} v{{ e.scenario.version }}</span> · execution <span class="mono">{{ e.execution_id }}</span></span></p>
+
+    <div class="cols">
+      <div class="claim">
+        <span class="prov prov-claim">AGENT CLAIM</span> <span class="muted">— unverified claim from target</span>
+        {% if e.agent_claim %}<blockquote><pre>{{ e.agent_claim.text }}</pre></blockquote>
+        {% else %}<p class="muted">No final response captured.</p>{% endif %}
+      </div>
+      <div class="verified">
+        <span class="prov prov-verified">VERIFIED</span> <span class="muted">— gateway evidence</span>
+        <ul>
+        {% for c in e.verified_outcome.tool_calls if c.side_effect %}
+          <li><span class="mono">{{ c.tool }}</span> (seq {{ c.seq }}) {{ c.outcome }} — changed state</li>
+        {% else %}<li>No state-changing tool call succeeded.</li>{% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <h3>Evidence timeline</h3>
+    <ol>
+      <li>Task input delivered to the agent (started {{ e.started_at or "—" }}).</li>
+      {% for c in e.verified_outcome.tool_calls %}
+      <li><span class="mono">#{{ c.seq }} {{ c.tool }}</span> → {{ c.outcome }}{% if c.side_effect %} · <strong>state changed</strong>{% endif %} <span class="mono muted">{{ c.id }}</span></li>
+      {% endfor %}
+      <li>Agent returned its final response; gateway captured final state (finished {{ e.finished_at or "—" }}).</li>
+    </ol>
+
+    <h3>Tool-call trace</h3>
+    {% for c in e.verified_outcome.tool_calls %}
+    <details><summary><span class="mono">#{{ c.seq }} {{ c.tool }}</span> — {{ c.outcome }}</summary>
+      <pre>{{ c.args|pretty }}</pre></details>
+    {% else %}<p class="muted">No tool calls.</p>{% endfor %}
+
+    <h3>State diff</h3>
+    {% if e.state_diff is none %}<p class="muted">State snapshots unavailable.</p>
+    {% elif not e.state_diff %}<p>No state changes.</p>
+    {% else %}
+    <div class="tablewrap"><table>
+      <thead><tr><th scope="col">Change</th><th scope="col">Table</th><th scope="col">Key</th><th scope="col">Before</th><th scope="col">After</th></tr></thead>
+      <tbody>{% for d in e.state_diff %}
+        <tr><td class="mono">{{ {"+": "+ added", "-": "− removed", "~": "~ changed"}[d.change] }}</td><td>{{ d.table }}</td>
+          <td class="mono">{{ d.key }}</td><td><pre>{{ d.before|pretty if d.before is not none else "—" }}</pre></td>
+          <td><pre>{{ d.after|pretty if d.after is not none else "—" }}</pre></td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+
+    <h3>Checks</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th scope="col">Check</th><th scope="col">Outcome</th><th scope="col">Message</th><th scope="col">Evidence</th></tr></thead>
+      <tbody>{% for c in e.checks %}
+        <tr class="verified"><td class="mono">{{ c.check_id }}<br><span class="muted">{{ c.rule_ref }}</span></td>
+          <td><strong>{{ c.outcome }}</strong></td><td>{{ c.message }}</td><td class="mono">{{ c.evidence_refs|join(", ") or "—" }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% if e.evidence_problems %}<p class="banner">Evidence problems: {{ e.evidence_problems|join("; ") }}</p>{% endif %}
+
+    <h3>Reproduction steps</h3>
+    <ol>{% for step in f.reproduction_steps %}<li>{{ step }}</li>{% endfor %}</ol>
+
+    <h3>Jury</h3>
+    {% for j in e.jury %}
+    <div class="model card">
+      <span class="prov prov-model">MODEL ANALYSIS</span> <span class="muted">— advisory; cannot change the verdict · {{ j.role }} · {{ j.model }} · {{ j.prompt_version }} · status {{ j.status }}</span>
+      {% if j.output %}
+        <p>{{ j.output.summary }}</p>
+        {% if j.output.root_cause %}<p><strong>Likely root cause:</strong> {{ j.output.root_cause }}</p>{% endif %}
+        {% if j.output.suggested_severity %}<p>Suggested severity (model): {{ j.output.suggested_severity }} — rule-based severity above is authoritative.</p>{% endif %}
+        {% if j.output.supports_verdict is defined and j.output.supports_verdict is not none %}<p>Counter-review supports the cited evidence: {{ "yes" if j.output.supports_verdict else "no" }}</p>{% endif %}
+      {% endif %}
+    </div>
+    {% else %}<p class="muted">Jury not run.</p>{% endfor %}
+  </article>
+  {% endfor %}
+  {% endif %}
+</section>
+
+<section id="controls" aria-labelledby="h-controls">
+  <h2 id="h-controls">Benign controls</h2>
+  {% if report.benign_controls %}
+  <div class="tablewrap"><table>
+    <thead><tr><th scope="col">Scenario</th><th scope="col">Task completed</th><th scope="col">Verdict</th><th scope="col">Note</th></tr></thead>
+    <tbody>{% for c in report.benign_controls %}
+      <tr><td class="mono">{{ c.scenario }}</td>
+        <td>{{ "✓ yes" if c.task_completed else ("✗ no" if c.task_completed is false else "—") }}</td>
+        <td>{{ verdict(c.verdict) }}</td><td>{{ c.note or "" }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted">No benign controls in this run.</p>{% endif %}
+</section>
+
+{% if report.retest_comparison %}
+<section id="retest" aria-labelledby="h-retest">
+  <h2 id="h-retest">Retest comparison</h2>
+  {% for c in report.retest_comparison %}
+  <div class="card verified">
+    <p><span class="prov prov-verified">VERIFIED</span> Original {{ verdict(c.original_verdict) }} {{ sev(c.original_severity) }}
+      → retest {{ verdict(c.retest_verdict) }} · <strong>{{ c.regression_status|replace("_", " ")|upper }}</strong></p>
+    <p class="muted">Original run <span class="mono">{{ c.original_run_id }}</span> · finding <span class="mono">{{ c.original_finding_id }}</span> · regression test <span class="mono">{{ c.regression_test_id }}</span></p>
+    <div class="tablewrap"><table>
+      <thead><tr><th scope="col">Check</th><th scope="col">Expected</th><th scope="col">Actual</th></tr></thead>
+      <tbody>{% for k, v in c.expected_checks.items() %}<tr><td class="mono">{{ k }}</td><td>{{ v }}</td><td><strong>{{ c.actual_checks[k] }}</strong></td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<section id="limitations" aria-labelledby="h-limitations">
+  <h2 id="h-limitations">Limitations</h2>
+  <ul>{% for l in report.limitations %}<li>{{ l }}</li>{% endfor %}</ul>
+  <p class="muted">Full list: docs/LIMITATIONS.md in the Blackbox Jury repository.</p>
+</section>
+</main>
+</body>
+</html>
