@@ -74,7 +74,11 @@ def test_refundbot_http_client_end_to_end(served: tuple[str, Recorder, Any]) -> 
     )
     reply = RefundBot(HttpToolClient(base), task).run()
     assert "has been processed" in reply
-    assert [e["tool"] for e in rec.of_type("tool_call")] == ["get_order", "issue_refund"]
+    assert [e["tool"] for e in rec.of_type("tool_call")] == [
+        "list_orders",
+        "get_order",
+        "issue_refund",
+    ]
     assert gw.store.refunded_cents("A-100") == 4000
 
 

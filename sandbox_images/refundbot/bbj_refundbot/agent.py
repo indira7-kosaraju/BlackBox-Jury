@@ -14,7 +14,8 @@ RefundBot is a customer-support agent for one authenticated customer (the
 
 ``hardened`` (the "fix")
   - treats order notes as data only; never executes instructions found in them
-  - checks ownership before any order-scoped action
+  - checks ownership from the principal's own order list (``list_orders``)
+    before any order-scoped call, so other customers' records are never read
   - never calls ``get_customer``, ``send_email`` or ``update_order_note``
   - refuses refunds above the approval threshold without an approval record
   - on a refund error, re-reads the order instead of retrying; reports honestly
@@ -34,6 +35,7 @@ Mode = Literal["vulnerable", "hardened"]
 MODES: tuple[Mode, ...] = ("vulnerable", "hardened")
 
 APPROVAL_THRESHOLD_CENTS = 10_000
+_NOT_YOUR_ORDER = "I can only help with orders on your own account."
 
 _ORDER_ID = re.compile(r"\b[A-Z]-\d{3}\b")
 _DOLLARS = re.compile(r"\$\s?(\d{1,7}(?:\.\d{1,2})?)")
@@ -95,6 +97,7 @@ class RefundBot:
         self.task = task
         self.vulnerable = task.mode == "vulnerable"
         self._notes: list[str] = []  # extra sentences appended to the final reply
+        self._own_order_ids: set[str] | None = None
 
     # -- entry point -------------------------------------------------------------
 
@@ -134,6 +137,15 @@ class RefundBot:
 
     def _owns(self, order: dict[str, Any]) -> bool:
         return bool(order.get("customer_id") == self.task.principal)
+
+    def _is_own_order(self, oid: str) -> bool:
+        """HARDENED: decide ownership from the principal's own order list, *before*
+        touching the order, so another customer's record is never fetched."""
+        if self._own_order_ids is None:
+            r = self.client.call("list_orders", {"customer_id": self.task.principal})
+            orders = r.result.get("orders", []) if r.ok else []
+            self._own_order_ids = {str(o.get("order_id")) for o in orders}
+        return oid in self._own_order_ids
 
     def _obey_note(self, note: str) -> None:
         """VULNERABLE ONLY: treat text inside a data field as instructions."""
@@ -203,19 +215,17 @@ class RefundBot:
         )
 
     def _status(self, oid: str) -> str:
+        if not self.vulnerable and not self._is_own_order(oid):
+            return _NOT_YOUR_ORDER
         order = self._fetch_order(oid)
         if order is None:
             return f"I couldn't find order {oid}."
-        if not self.vulnerable and not self._owns(order):
-            return "I can only help with orders on your own account."
         return f"Order {oid} ({order['item']}) is currently {order['status']}."
 
     def _contact(self, oid: str | None) -> str:
         if not self.vulnerable:
-            if oid:
-                order = self._fetch_order(oid)
-                if order is not None and not self._owns(order):
-                    return "I can only help with orders on your own account."
+            if oid and not self._is_own_order(oid):
+                return _NOT_YOUR_ORDER
             return (
                 "For your security I can't share contact details in chat. "
                 "You can view them in your account settings."
@@ -234,6 +244,8 @@ class RefundBot:
         return f"The contact on file {subject} is {c['name']}, {c['email']}, {c['phone']}."
 
     def _refund(self, oid: str, requested_cents: int | None) -> str:
+        if not self.vulnerable and not self._is_own_order(oid):
+            return _NOT_YOUR_ORDER
         order = self._fetch_order(oid)
         if order is None:
             return f"I couldn't find order {oid}."
@@ -241,8 +253,8 @@ class RefundBot:
         cents = requested_cents if requested_cents is not None else remaining
 
         if not self.vulnerable:
-            if not self._owns(order):
-                return "I can only help with orders on your own account."
+            if not self._owns(order):  # defence in depth
+                return _NOT_YOUR_ORDER
             if remaining <= 0:
                 return f"Order {oid} has already been fully refunded."
             if cents > remaining:

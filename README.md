@@ -6,7 +6,7 @@ Blackbox Jury is a security-first testing system for tool-using AI agents. It ru
 
 > Results reflect only the scenarios executed. Blackbox Jury does not establish that any agent is secure.
 
-**Status:** Phase 2 (mock target and sandbox images). See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+**Status:** Phase 3 (task contract and deterministic checks). See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 ## Project documents
 

@@ -134,7 +134,7 @@
 - **Goal:** verdicts, severity, findings, DB, run lifecycle, and the API from API.md.
 - **Tasks:**
   - **For the slice:**
-    - `verdict.py` and `severity.py`;
+    - ~~`verdict.py` and `severity.py`~~ (done early, in Phase 3, because they enforce "LLM output cannot override deterministic rules");
     - the run pipeline in the worker;
     - a minimal JSON report;
     - `bbj run`.
