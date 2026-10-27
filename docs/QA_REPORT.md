@@ -71,9 +71,15 @@ Each was found by a test, a timing measurement or review, fixed, and covered by 
 7. **A fresh checkout couldn't migrate** (the `data/` directory was never created). Phase 10.
 8. **"Not run" executions were counted as executed,** which could print "No violations observed" for an all-inconclusive run. Found by the independent code review in Phase 10.
 
-## 5. Not verified
+## 5. Verified after the first report
+
+- **HTML report rendering** (headless Chrome):
+  - at an exact 375 px viewport the page fits, and wide tables scroll inside their own containers;
+  - light and dark themes both render correctly;
+  - desktop width (1280 px) renders correctly.
+
+## 6. Not verified
 
 - **The live Anthropic API** (jury): only mocked. No key was configured, and sending data externally needs approval.
-- **HTML report rendering** at 375 px and in both themes, viewed in a real browser.
 - **Platforms:** behaviour on Linux and Docker Engine (only Docker Desktop for macOS was tested).
 - **Performance:** load beyond one run at a time.

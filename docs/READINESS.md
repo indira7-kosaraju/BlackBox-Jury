@@ -11,11 +11,15 @@ There are **no blockers**. The core loop works end to end against the real Docke
 1. **Docker Desktop must be running.** Without it, nothing executes, by design: the run returns `sandbox_unavailable`. Start it before the demo and check `/ready`.
 2. **The target is scripted.** RefundBot's vulnerable and hardened modes are deterministic. That is honest and repeatable, but say so explicitly. Results are synthetic and do not measure detection quality on real, model-driven agents.
 3. **The jury (LLM) is untested against the live API.** It is off by default and covered only by mocked tests. Do not enable it on stage unless someone has tested it with a real key beforehand.
-4. **The HTML report has not been viewed in a browser.** Structure, escaping and CSP are tested, but phone width (375 px) and the dark theme need a manual look.
+4. ~~The HTML report has not been viewed in a browser.~~ **Verified 2026-10-27** with headless Chrome:
+   - At an exact 375 px viewport (rendered in an iframe), the page fits. The findings table scrolls inside its own container, and the page does not scroll sideways.
+   - Light theme (forced) and dark theme both render correctly; desktop width (1280 px) renders correctly.
 5. **The CLI needs `PYTHONPATH=src`** because of macOS hidden `.pth` files. Use the `make` targets or the command in `DEMO_SCRIPT.md`.
 6. **Only macOS + Docker Desktop was tested.** Linux / Docker Engine is unverified.
 
 ## Checklist (prompt 20)
+
+**Re-verified 2026-10-27, second session.** Docker 29.7.2 was running, and the images were rebuilt from HEAD. Results: `make check` passed with 764 tests; `pytest -m docker` passed all 37; a fresh-copy end-to-end run (vulnerable demo, export, fix, retest, hardened demo, server restart on the existing DB) passed; 0 leftover containers. No API keys were set, and the jury stayed off.
 
 | Requirement | Status | Evidence (executed) |
 |---|---|---|
@@ -46,7 +50,6 @@ fresh-copy rehearsal (make run/seed/demo + export/fix/retest) → passed, 23 s
 
 ## Must be verified manually before presenting
 
-- Open one HTML report on a phone-width window and in dark mode.
 - Rehearse the 5-minute script once on the presentation laptop, with Docker running.
 - If the jury will be shown, run it once with a real key and read its output.
 
