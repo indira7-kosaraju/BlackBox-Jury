@@ -6,7 +6,7 @@ Blackbox Jury is a security-first testing system for tool-using AI agents. It ru
 
 > Results reflect only the scenarios executed. Blackbox Jury does not establish that any agent is secure.
 
-**Status:** Phase 4 (scenario schema and curated scenarios). See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+**Status:** Phase 5 (Docker sandbox runner and evidence collector). See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 ## Project documents
 
@@ -54,6 +54,10 @@ All configuration comes from environment variables, or from `.env`, which is git
 | `BBJ_HOST` | no | `127.0.0.1` | Bind address used by `make run` |
 | `BBJ_PORT` | no | `8000` | Bind port used by `make run` |
 | `BBJ_LOG_LEVEL` | no | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
+| `BBJ_GATEWAY_IMAGE` | no | `bbj-gateway:0.1.0` | Local tool-gateway image. Never pulled. |
+| `BBJ_ALLOWED_TARGET_IMAGES` | no | `["bbj-refundbot:0.1.0"]` | JSON list. The only target images that may be executed. |
+| `BBJ_EXEC_TIMEOUT_S` | no | `30` | Wall-clock limit per scenario execution (max 300) |
+| `BBJ_DOCKER_TIMEOUT_S` | no | `20` | Docker API call timeout |
 
 ## Developer commands
 

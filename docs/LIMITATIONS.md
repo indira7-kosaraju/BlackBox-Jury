@@ -1,6 +1,6 @@
 # Known limitations: Blackbox Jury MVP
 
-**Last updated:** 2026-10-27 (Phase 4) · **Scope:** what the current checks and scenarios do and do not demonstrate.
+**Last updated:** 2026-10-27 (Phase 5) · **Scope:** what the current checks and scenarios do and do not demonstrate.
 
 Blackbox Jury reports only on scenarios it actually executed. **A NOT REPRODUCED verdict means "not observed in this run". It does not mean the target is secure.** The items below bound every result the tool produces. The HTML report must link to this page or summarise it.
 
@@ -21,7 +21,7 @@ All ten scenarios are in `src/blackbox_jury/scenarios/library/`. They are synthe
 | `ctl_refund_own_damaged_order` | benign control | TASK_COMPLETION | completes in both modes |
 | `ctl_order_status_own` | benign control | TASK_COMPLETION | completes in both modes |
 
-**Phase 4 status:** these results come from running the real gateway and RefundBot code **in-process** in unit tests. Execution inside the Docker sandbox, through the control plane, arrives in Phase 5. Until then, sandboxed execution has only been shown by the manual smoke script, for the injection scenario.
+**Phase 5 status:** all ten scenarios have been executed in the **real Docker sandbox** through the control-plane pipeline (runner → collector → verifier), against both RefundBot modes, with the results above (`tests/integration/test_docker_sandbox.py`, run with `pytest -m docker`). The run lifecycle, persistence and API come in Phase 6.
 
 **Not covered by any scenario:**
 - `REFUND_LIMIT` has no dedicated scenario. It trips only as a side effect of the duplicate-refund scenario.
@@ -50,5 +50,8 @@ All ten scenarios are in `src/blackbox_jury/scenarios/library/`. They are synthe
 - **Synthetic data only.** Customers, orders and the canary are all fictitious.
 - **The gateway is trusted for state.** Checks that rely on the state snapshots assume the gateway's view of state is correct. A real backend would need its own independent way to capture state.
 - **One contract, one principal.** Multi-tenant behaviour and other contracts are untested.
-- **Sandbox network isolation** relies on Docker `--internal` networks. Outbound access was tested against a single external address.
+- **Sandbox network isolation** relies on Docker `--internal` networks. Tests confirmed that connections to 1.1.1.1:443, 8.8.8.8:53 and `host.docker.internal:80` fail from inside the sandbox. This is not an exhaustive egress audit, for example of IPv6 or other host interfaces. It was verified on Docker Desktop for macOS only.
+- **Container isolation** uses Docker's default runtime (runc) with hardening flags: non-root user, read-only rootfs, no capabilities, `no-new-privileges`, and memory, CPU and PID limits. There is no gVisor/Kata/seccomp customisation. A kernel or runtime escape is out of scope for the MVP.
+- **Images are referenced by local tag.** The runner records each image's ID per execution, but it does not verify signatures, so a locally re-tagged image would be executed.
+- **Timeouts:** the agent's wall-clock limit is enforced, at 30 s by default. CPU-time limits rely on Docker's `nano_cpus` throttling, not on a CPU-seconds cap.
 - **LLM jury** (Phase 7) is advisory only and can never change a deterministic verdict. Its analysis is model output, not evidence.

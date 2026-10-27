@@ -53,13 +53,32 @@ def test_auth_denied_is_logged_without_token(
     assert any(r.getMessage() == "auth.denied" for r in caplog.records)
 
 
-def test_ready_reports_not_ready_honestly(client: TestClient, auth_headers: dict[str, str]) -> None:
-    # Phase 1 has no DB or Docker checks yet; readiness must not be claimed.
+class _FakeRunner:
+    def __init__(self, state: dict[str, str]) -> None:
+        self.state = state
+
+    def readiness(self) -> dict[str, str]:
+        return self.state
+
+
+@pytest.mark.parametrize(
+    "sandbox",
+    [
+        {"docker": "ok", "images": "ok"},
+        {"docker": "ok", "images": "missing"},
+        {"docker": "unreachable", "images": "unknown"},
+    ],
+)
+def test_ready_reports_not_ready_honestly(
+    app: FastAPI, client: TestClient, auth_headers: dict[str, str], sandbox: dict[str, str]
+) -> None:
+    # No database until Phase 6, so readiness is never claimed even if Docker is fine.
+    app.state.runner = _FakeRunner(sandbox)
     resp = client.get("/api/v1/ready", headers=auth_headers)
     assert resp.status_code == 503
     body = resp.json()
     assert body["status"] == "not_ready"
-    assert set(body["checks"]) == {"database", "docker", "images"}
+    assert body["checks"] == {"database": "not_configured", **sandbox}
 
 
 def test_unknown_route_uses_error_schema(client: TestClient) -> None:

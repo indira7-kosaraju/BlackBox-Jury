@@ -155,7 +155,7 @@ MVP adapter type: **`sandboxed_container`**. A target is a container image that 
   - `gateway_error`;
   - `gateway_stopped`.
 - Strings inside events are capped at 4 KB. Tool calls are capped at 100 per execution, and each request body at 16 KB.
-- Faults injected from the seed (`fail`, `fail_after_commit`) make the reliability scenarios deterministic.
+- Faults injected from the seed (`fail`, `fail_after_commit`, and `delay` of at most 10 s per call) make the reliability scenarios deterministic. `delay` is used to test timeouts and cancellation.
 
 Python-side abstraction (control plane):
 
@@ -175,7 +175,7 @@ Steps for each execution, all in `DockerSandboxRunner`:
 1. Generate an `execution_nonce` (128-bit random).
 2. Create the network `bbj-exec-<id>` with `internal=True`, which gives no route to the outside world.
 3. Start the **gateway** container. The seeded state (`BBJ_SEED_STATE`, base64 JSON, at most 64 KB) and the nonce (`BBJ_EXECUTION_NONCE`) are passed as env vars. The store is an in-memory SQLite database, so nothing is written to disk.
-4. Wait for the gateway to report ready (a log line), with a 5 s timeout.
+4. Wait for the gateway to report ready (a `gateway_ready` log line carrying the nonce), with a 10 s timeout. Docker Desktop container start-up can take more than 5 s on a cold machine.
 5. Start the **agent** container on the same network, with `BBJ_GATEWAY_URL` and `BBJ_TASK_INPUT`.
 6. Wait for the agent with a wall-clock timeout (`BBJ_EXEC_TIMEOUT_S`, default 30 s). On timeout or cancel, kill the agent.
 7. Send SIGTERM to the gateway. It emits `state_after` and exits. After a 3 s grace period it is killed (and the evidence is then incomplete, so the result is INCONCLUSIVE).
@@ -192,6 +192,15 @@ Container hardening, applied to both containers:
 | Resources | `mem_limit=256m`, `nano_cpus=0.5 CPU`, `pids_limit=64` |
 | Time | Per-execution timeout of 30 s. Per-run timeout of 10 min (`BBJ_RUN_TIMEOUT_S`). |
 | Images | Built locally from `sandbox_images/`, base pinned by digest, stdlib only |
+
+**Implementation (Phase 5).**
+- `sandbox/docker_runner.py` validates each request before touching Docker: the gateway image is the configured one, the target image is on the allowlist, and payloads are within size limits.
+- Images must already exist locally and are never pulled.
+- Containers are created and started via the Docker SDK with the shared `hardening_kwargs`.
+- Container stdout is capped at 1 MB for the gateway and 256 KB for the agent.
+- `evidence/collector.py` accepts gateway lines only if each is valid JSON in a strict, non-coercing schema, carries this execution's nonce and protocol v1, and has a contiguous `seq`. It requires the full gateway lifecycle and takes the agent's claim only from its last stdout line.
+- Any unexpected, foreign-nonce, malformed, oversized or truncated input means the evidence is incomplete, so the result is INCONCLUSIVE. The collector never raises on hostile input.
+- `orchestrator/pipeline.py` chains runner → collector → verifier → verdict for one scenario. The DB and run lifecycle come in Phase 6.
 
 **Cancellation.** `POST /runs/{id}/cancel` sets a cancel flag in the DB and in memory. The worker checks it before each execution, and the runner checks it while waiting and kills the agent. Executions affected by a cancel become `cancelled`, so their verdict is INCONCLUSIVE (`cancelled`). Executions that already finished keep their verdicts.
 
@@ -242,6 +251,7 @@ class LLMProvider(Protocol):
 
 - Secrets live only in env vars. These are `BBJ_API_TOKEN` and the LLM provider key. They are loaded through `pydantic-settings` as `SecretStr` and never logged.
 - `core/redaction.py` is one shared redactor. It masks secret patterns (API keys, bearer tokens, private keys, the provider-key shape, the configured env secret values) and is applied to all logs, stored evidence, API errors and LLM inputs.
+- **The verifier runs on unredacted, in-memory evidence**, because redaction could mask the very value a check must detect. That raw bundle is never persisted or logged. Only the collector's redacted, hashed copies are stored or displayed (`evidence/collector.py`).
 - Synthetic PII that proves an exposure is stored masked (for example `j***@example.test`) along with the fingerprint id that matched. The canary secret is a fake value generated per seed and stored only as its hash.
 - No secrets are passed into sandbox containers.
 

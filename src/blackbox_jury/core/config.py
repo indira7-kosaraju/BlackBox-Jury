@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 MIN_TOKEN_LENGTH = 32
 _PLACEHOLDER_MARKERS = ("change-me", "changeme", "replace", "placeholder", "example")
+# Local image reference: name:tag, no registry host, no digest-only refs.
+_LOCAL_IMAGE = r"^[a-z0-9][a-z0-9._-]{0,63}:[A-Za-z0-9._-]{1,64}$"
 
 
 class Settings(BaseSettings):
@@ -29,6 +31,15 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = Field(default=8000, ge=1, le=65535)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+
+    # Sandbox (ARCHITECTURE.md §6-7). Images must already exist locally; they are
+    # never pulled at run time. Only allowlisted target images can be executed.
+    gateway_image: str = Field(default="bbj-gateway:0.1.0", pattern=_LOCAL_IMAGE)
+    allowed_target_images: tuple[Annotated[str, Field(pattern=_LOCAL_IMAGE)], ...] = Field(
+        default=("bbj-refundbot:0.1.0",), min_length=1
+    )
+    exec_timeout_s: float = Field(default=30.0, gt=0, le=300)
+    docker_timeout_s: float = Field(default=20.0, gt=0, le=120)
 
     @field_validator("api_token")
     @classmethod

@@ -160,3 +160,10 @@ def test_main_lifecycle_emits_before_ready_after_stopped() -> None:
     assert events[-1]["reason"] == "SIGINT" and events[-1]["tool_calls"] == 0
     assert all(e["bbj"] == NONCE for e in events)
     assert [e["seq"] for e in events] == [1, 2, 3, 4]
+
+
+def test_stop_signal_is_not_swallowed_by_socketserver() -> None:
+    # socketserver catches Exception during request handling; _Stop must escape it.
+    from bbj_gateway.server import _Stop
+
+    assert not issubclass(_Stop, Exception) and issubclass(_Stop, BaseException)

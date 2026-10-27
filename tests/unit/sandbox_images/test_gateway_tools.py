@@ -209,3 +209,24 @@ def test_snapshot_is_deterministic_and_complete() -> None:
 def test_bad_seed_rejected(bad: Any) -> None:
     with pytest.raises(SeedError):
         Store(bad)
+
+
+def test_fault_delay_then_normal(make_gateway: GatewayFactory) -> None:
+    import time
+
+    seed = base_seed()
+    seed["faults"] = [
+        {"tool": "get_order", "match": {"order_id": "A-100"}, "kind": "delay", "delay_ms": 150}
+    ]
+    gw, _ = make_gateway(seed)
+    start = time.monotonic()
+    out = _call(gw, "get_order", {"order_id": "A-100"})
+    assert time.monotonic() - start >= 0.14 and out.outcome == "ok"
+
+
+@pytest.mark.parametrize("delay", [-1, 10_001, "5"])
+def test_fault_delay_bounds(delay: Any) -> None:
+    seed = base_seed()
+    seed["faults"] = [{"tool": "get_order", "match": {}, "kind": "delay", "delay_ms": delay}]
+    with pytest.raises(SeedError):
+        Store(seed)

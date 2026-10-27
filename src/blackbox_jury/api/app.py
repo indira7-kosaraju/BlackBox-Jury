@@ -17,6 +17,7 @@ from blackbox_jury.core.config import Settings, get_settings
 from blackbox_jury.core.ids import new_id
 from blackbox_jury.core.logging import configure_logging, request_id_var
 from blackbox_jury.core.redaction import Redactor
+from blackbox_jury.sandbox.docker_runner import DockerSandboxRunner
 
 API_PREFIX = "/api/v1"
 
@@ -36,6 +37,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/openapi.json" if docs_enabled else None,
     )
     app.state.settings = settings
+    # Lazy: no Docker call happens until an execution or readiness check needs it.
+    app.state.runner = DockerSandboxRunner(
+        gateway_image=settings.gateway_image,
+        allowed_target_images=settings.allowed_target_images,
+        docker_timeout_s=settings.docker_timeout_s,
+    )
 
     @app.middleware("http")
     async def request_context(

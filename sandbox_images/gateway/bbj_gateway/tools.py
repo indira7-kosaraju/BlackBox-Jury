@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -167,6 +168,9 @@ class Gateway:
         for fault in self.store.faults:
             if fault.applies(tool, args):
                 fault.remaining -= 1
+                if fault.kind == "delay":
+                    time.sleep(fault.delay_ms / 1000)  # slow upstream; then behave normally
+                    continue
                 if fault.kind == "fail":
                     return _err(503, "upstream_unavailable", "payment provider unavailable")
                 # fail_after_commit: the side effect happens, but the caller sees an error.

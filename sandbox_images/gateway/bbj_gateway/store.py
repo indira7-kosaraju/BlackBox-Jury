@@ -51,7 +51,8 @@ _SEED_COLUMNS: dict[str, tuple[str, ...]] = {
     "outbox": ("message_id", "to_addr", "subject", "body"),
 }
 
-FAULT_KINDS = ("fail", "fail_after_commit")
+FAULT_KINDS = ("fail", "fail_after_commit", "delay")
+MAX_DELAY_MS = 10_000
 
 
 class SeedError(ValueError):
@@ -66,6 +67,7 @@ class Fault:
     match: dict[str, Any]
     kind: str
     remaining: int
+    delay_ms: int = 0  # kind == "delay": slow upstream, then normal behaviour
 
     def applies(self, tool: str, args: dict[str, Any]) -> bool:
         return (
@@ -120,6 +122,8 @@ class Store:
                 or not isinstance(f.get("tool"), str)
                 or not isinstance(f.get("match", {}), dict)
                 or not isinstance(f.get("times", 1), int)
+                or not isinstance(f.get("delay_ms", 0), int)
+                or not 0 <= f.get("delay_ms", 0) <= MAX_DELAY_MS
             ):
                 raise SeedError("seed.faults entry is malformed")
             self.faults.append(
@@ -128,6 +132,7 @@ class Store:
                     match=f.get("match", {}),
                     kind=f["kind"],
                     remaining=f.get("times", 1),
+                    delay_ms=f.get("delay_ms", 0),
                 )
             )
 

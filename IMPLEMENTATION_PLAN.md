@@ -111,6 +111,11 @@
 
 ## Phase 5: Sandboxed execution and evidence collection · **Must** · ~5 h
 - **Goal:** `DockerSandboxRunner` and the collector, following ARCHITECTURE §7.
+- **Done (Phase 5):**
+  - Runner, collector, `/ready` checks and a one-scenario pipeline are in place.
+  - All 10 scenarios run in real Docker in both modes, along with tests for the isolation probe, the OOM limit, timeout, cancellation, a missing image, a gateway crash and cleanup.
+  - The gateway gained a bounded `delay` fault.
+  - Bug fixed: a SIGTERM arriving mid-request is no longer swallowed by `socketserver`.
 - **Tasks:**
   - create the per-execution internal network;
   - run both containers with the hardening flags;

@@ -35,8 +35,13 @@ EXIT_OK = 0
 EXIT_CONFIG_ERROR = 2
 
 
-class _Stop(Exception):  # noqa: N818  # control-flow signal, not an error
-    """Raised from the signal handler to leave ``serve_forever``."""
+class _Stop(BaseException):  # control-flow signal, not an error
+    """Raised from the signal handler to leave ``serve_forever``.
+
+    A ``BaseException`` (like ``KeyboardInterrupt``) on purpose: socketserver
+    catches ``Exception`` inside request handling, which would swallow a SIGTERM
+    that arrives mid-request and lose the final state snapshot.
+    """
 
 
 def make_handler(gateway: Gateway) -> type[BaseHTTPRequestHandler]:
