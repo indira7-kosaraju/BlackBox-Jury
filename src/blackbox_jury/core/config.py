@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import Field, SecretStr, field_validator
@@ -40,6 +41,12 @@ class Settings(BaseSettings):
     )
     exec_timeout_s: float = Field(default=30.0, gt=0, le=300)
     docker_timeout_s: float = Field(default=20.0, gt=0, le=120)
+    run_timeout_s: float = Field(default=600.0, gt=0, le=3600)
+
+    # Storage and demo inputs (paths relative to the working directory).
+    database_url: str = Field(default="sqlite:///./data/bbj.db", pattern=r"^sqlite:///")
+    seed_path: Path = Path("seeds/synthetic_store.json")
+    contracts_dir: Path = Path("contracts")
 
     @field_validator("api_token")
     @classmethod

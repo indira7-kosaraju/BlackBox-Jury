@@ -121,6 +121,24 @@ class DockerSandboxRunner:
             return {"docker": "unreachable", "images": "unknown"}
         return {"docker": "ok", "images": "ok"}
 
+    def sweep_orphans(self) -> int:
+        """Remove sandbox containers/networks left by a crashed control plane.
+
+        Only resources carrying our ``bbj.execution`` label are touched. Call only
+        when no run is active (e.g. at startup, after crash recovery).
+        """
+        client = self.client()
+        removed = 0
+        for container in client.containers.list(all=True, filters={"label": LABEL}):
+            with contextlib.suppress(NotFound, APIError):
+                container.remove(force=True)
+                removed += 1
+        for network in client.networks.list(filters={"label": LABEL}):
+            with contextlib.suppress(NotFound, APIError):
+                network.remove()
+                removed += 1
+        return removed
+
     # -- execution ---------------------------------------------------------------------
 
     def _validate(self, spec: ExecutionSpec) -> None:

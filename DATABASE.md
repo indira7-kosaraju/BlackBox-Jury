@@ -8,7 +8,7 @@
 
 ## 1. Conventions
 
-- **Primary keys:** `TEXT` ULIDs, prefixed by entity (`run_01J…`, `exe_01J…`). They sort by time and are not guessable.
+- **Primary keys:** `TEXT` ULIDs, prefixed by entity (`run_01J…`, `exe_01J…`). They sort by time and are monotonic within a process, so ids created in the same millisecond increment. Ids are **not secrets**: every read is authorized and scoped by project.
 - **Timestamps:** `TEXT` in ISO-8601 UTC with milliseconds, set by the application.
 - **JSON columns:** `TEXT` holding JSON (SQLAlchemy `JSON` type). They are validated by Pydantic before writing.
 - **Enums:** `TEXT` with `CHECK (col IN (...))`.
@@ -132,8 +132,9 @@ Indexes: UNIQUE(project_id, idempotency_key); (project_id, created_at DESC); (st
 | inconclusive_reason | TEXT | CHECK IN ('timeout','cancelled','sandbox_error','missing_evidence','verifier_error','jury_only_flag') |
 | severity | TEXT | CHECK IN ('critical','high','medium','low'), rule-based, only when CONFIRMED |
 | task_completed | INTEGER | NULL; set for benign scenarios |
-| execution_nonce_sha256 | TEXT | NOT NULL (only the hash of the nonce is kept after collection) |
-| sandbox_meta | JSON | NULL: images and digests, limits, exit codes, duration_ms, cleanup_ok |
+| execution_nonce_sha256 | TEXT | NULL until the sandbox ran. Only the hash of the nonce is kept. |
+| sandbox_meta | JSON | NULL: images and image IDs, limits, exit code, duration_ms, cleanup_ok, sandbox outcome and error |
+| evidence_problems | JSON | NULL. The collector's list of evidence problems (why evidence was incomplete). *(Added in Phase 6.)* |
 | started_at, finished_at | TEXT | NULL |
 
 **Integrity CHECKs** (database-level backstops for PRD FR11, FR22 and FR23):
@@ -141,6 +142,7 @@ Indexes: UNIQUE(project_id, idempotency_key); (project_id, created_at DESC); (st
 - `verdict = 'INCONCLUSIVE' → inconclusive_reason IS NOT NULL`
 - `verdict = 'CONFIRMED' → severity IS NOT NULL`
 - `verdict <> 'CONFIRMED' → severity IS NULL`
+- `verdict IS NULL → status IN ('pending','running','collected')`: every terminal execution has a verdict *(added in Phase 6)*
 
 Indexes: UNIQUE(run_id, scenario_id); (run_id, verdict).
 
@@ -184,6 +186,7 @@ Index: (execution_id, kind). `agent_final_response` is the **untrusted claim** (
 | outcome | TEXT | NOT NULL, CHECK IN ('PASS','FAIL','ERROR') |
 | evidence_refs | JSON | NOT NULL, a list of tool_call_event or artifact ids; **must be non-empty when outcome='FAIL'**, enforced in the repository |
 | message | TEXT | NOT NULL |
+| side_effect | INTEGER | NOT NULL, default 0. Whether the violation changed state (drives severity). *(Added in Phase 6.)* |
 | verifier_version | TEXT | NOT NULL |
 | created_at | TEXT | NOT NULL |
 

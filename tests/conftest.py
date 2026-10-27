@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -9,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from blackbox_jury.api.app import create_app
 from blackbox_jury.core.config import Settings
+from tests.fakes.fake_runner import FakeSandboxRunner
 
 TEST_TOKEN = "t3st-" + "k" * 40
 
@@ -22,14 +24,28 @@ def _isolate_env(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempP
     monkeypatch.chdir(tmp_path_factory.mktemp("cwd"))
 
 
-@pytest.fixture
-def settings() -> Settings:
-    return Settings(api_token=TEST_TOKEN, env="test")  # type: ignore[arg-type]
+ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
-def app(settings: Settings) -> FastAPI:
-    return create_app(settings)
+def settings(tmp_path: Path) -> Settings:
+    return Settings(  # type: ignore[call-arg]
+        api_token=TEST_TOKEN,  # type: ignore[arg-type]
+        env="test",
+        database_url=f"sqlite:///{tmp_path / 'bbj.db'}",
+        seed_path=ROOT / "seeds" / "synthetic_store.json",
+        contracts_dir=ROOT / "contracts",
+    )
+
+
+@pytest.fixture
+def fake_runner() -> FakeSandboxRunner:
+    return FakeSandboxRunner()
+
+
+@pytest.fixture
+def app(settings: Settings, fake_runner: FakeSandboxRunner) -> FastAPI:
+    return create_app(settings, runner=fake_runner, inline_worker=True)
 
 
 @pytest.fixture

@@ -1,6 +1,6 @@
 # Known limitations: Blackbox Jury MVP
 
-**Last updated:** 2026-10-27 (Phase 5) · **Scope:** what the current checks and scenarios do and do not demonstrate.
+**Last updated:** 2026-10-27 (Phase 6) · **Scope:** what the current checks and scenarios do and do not demonstrate.
 
 Blackbox Jury reports only on scenarios it actually executed. **A NOT REPRODUCED verdict means "not observed in this run". It does not mean the target is secure.** The items below bound every result the tool produces. The HTML report must link to this page or summarise it.
 
@@ -44,7 +44,15 @@ All ten scenarios are in `src/blackbox_jury/scenarios/library/`. They are synthe
 | FALSE_SUCCESS_CLAIM | Recognises English *refund* success phrases only. Claims about other actions (emails, note changes) are not checked. Claims it can't parse cleanly give ERROR, which makes the result INCONCLUSIVE rather than a false pass. |
 | TASK_COMPLETION | Checks the declared state effects and literal response substrings. It does not judge answer quality. |
 
-## 3. Environment and evidence limits
+## 3. Control-plane limits (Phase 6)
+
+- **Single process.** One worker thread runs one run at a time. The one-active-run check, rate limits and cancel tokens live in process memory, so rate-limit counters reset on restart.
+- **Idempotency keys never expire.** That is stricter than the 24 h in API.md: a reused key always returns the original run, or 409 if the request body differs.
+- **Auth is a single shared API token.** There are no users or roles. Project scoping is modelled but only one project is used.
+- **SQLite only.** There is no retention/prune job yet (`bbj prune` is not implemented). The database grows until it is deleted.
+- **Execution order** follows creation order, which is alphabetical by scenario key for suites.
+
+## 4. Environment and evidence limits
 
 - **Scripted target.** RefundBot is deterministic and deliberately vulnerable. These results show that the checks and the pipeline work. They are **not** evidence about how well detection would work on real, model-driven agents.
 - **Synthetic data only.** Customers, orders and the canary are all fictitious.

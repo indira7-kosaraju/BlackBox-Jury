@@ -1,4 +1,4 @@
-.PHONY: install check lint format format-check typecheck test test-docker run images sandbox-smoke
+.PHONY: install check lint format format-check typecheck test test-docker run images sandbox-smoke seed demo
 
 install:
 	uv sync
@@ -25,7 +25,7 @@ test-docker:
 
 # Binds to 127.0.0.1 by default; reads BBJ_* from the environment or .env.
 run:
-	uv run uvicorn --app-dir src --factory blackbox_jury.api.app:create_app \
+	PYTHONPATH=src uv run uvicorn --app-dir src --factory blackbox_jury.api.app:create_app \
 		--host $${BBJ_HOST:-127.0.0.1} --port $${BBJ_PORT:-8000}
 
 # Sandbox images (stdlib-only, base pinned by digest). Requires Docker.
@@ -38,3 +38,13 @@ images:
 # full hardening flags. Superseded by DockerSandboxRunner in Phase 5.
 sandbox-smoke:
 	scripts/sandbox_smoke.sh
+
+# CLI via `python -m` with src on the path (works around the macOS hidden-.pth issue).
+BBJ = PYTHONPATH=src uv run python -m blackbox_jury.cli
+
+seed:
+	$(BBJ) seed
+
+# Requires the API running (`make run`) and Docker with images built.
+demo:
+	$(BBJ) run --suite demo

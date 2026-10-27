@@ -6,7 +6,7 @@ Blackbox Jury is a security-first testing system for tool-using AI agents. It ru
 
 > Results reflect only the scenarios executed. Blackbox Jury does not establish that any agent is secure.
 
-**Status:** Phase 5 (Docker sandbox runner and evidence collector). See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+**Status:** Phase 6 (database, run lifecycle, API, CLI, JSON report). See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 ## Project documents
 
@@ -37,10 +37,30 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 # 3. Run the checks
 make check
 
-# 4. Start the API (binds to 127.0.0.1 only)
+# 4. Build the sandbox images (Docker Desktop must be running)
+make images
+
+# 5. Start the API (binds to 127.0.0.1 only; applies DB migrations on startup)
 make run
-curl http://127.0.0.1:8000/health
+
+# 6. In a second terminal: seed the demo data and run the demo suite
+make seed          # contract, 10 curated scenarios, the RefundBot target (vulnerable)
+make demo          # = bbj run --suite demo; streams verdicts, writes reports/out/<run>.json
 ```
+
+The CLI can also be called directly with `PYTHONPATH=src uv run python -m blackbox_jury.cli <command>`. The commands are:
+
+| Command | What it does |
+|---|---|
+| `seed` | Seed the demo data |
+| `db upgrade` | Apply database migrations |
+| `run --suite demo\|slice` | Run a suite |
+| `run --scenario KEY` | Run one scenario |
+| `status RUN_ID` | Show a run's status |
+| `report RUN_ID` | Print a run's report |
+| `cancel RUN_ID` | Cancel a run |
+
+`PYTHONPATH=src` is needed because of the macOS hidden-`.pth` issue described under "Known issues".
 
 ## Configuration
 
@@ -58,6 +78,10 @@ All configuration comes from environment variables, or from `.env`, which is git
 | `BBJ_ALLOWED_TARGET_IMAGES` | no | `["bbj-refundbot:0.1.0"]` | JSON list. The only target images that may be executed. |
 | `BBJ_EXEC_TIMEOUT_S` | no | `30` | Wall-clock limit per scenario execution (max 300) |
 | `BBJ_DOCKER_TIMEOUT_S` | no | `20` | Docker API call timeout |
+| `BBJ_RUN_TIMEOUT_S` | no | `600` | Wall-clock limit for a whole run (max 3600) |
+| `BBJ_DATABASE_URL` | no | `sqlite:///./data/bbj.db` | SQLite only |
+| `BBJ_SEED_PATH` | no | `seeds/synthetic_store.json` | Synthetic base seed |
+| `BBJ_CONTRACTS_DIR` | no | `contracts` | Contract YAML files loaded by `bbj seed` |
 
 ## Developer commands
 
@@ -70,6 +94,7 @@ All configuration comes from environment variables, or from `.env`, which is git
 | `make test-docker` | sandbox integration tests (requires Docker) |
 | `make run` | start the API on `127.0.0.1:8000` |
 | `make images` | build the sandbox images `bbj-gateway:0.1.0` and `bbj-refundbot:0.1.0` (requires Docker) |
+| `make seed` / `make demo` | Seed the demo data and run the demo suite through the API (`make run` must be running) |
 | `make sandbox-smoke` | run one gateway + RefundBot pair in the hardened sandbox and print the evidence. Args: `scripts/sandbox_smoke.sh [vulnerable\|hardened] "message"`; optional `NOTE="..."` overrides order A-101's note. |
 
 ## Known issues

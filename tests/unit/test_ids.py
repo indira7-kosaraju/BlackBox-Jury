@@ -23,3 +23,8 @@ def test_time_sortable() -> None:
 def test_rejects_bad_prefix(bad: str) -> None:
     with pytest.raises(ValueError):
         new_id(bad)
+
+
+def test_monotonic_within_process() -> None:
+    ids = [new_id("exe") for _ in range(2000)]
+    assert ids == sorted(ids) and len(set(ids)) == 2000

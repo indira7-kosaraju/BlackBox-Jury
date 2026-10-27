@@ -208,7 +208,14 @@ Container hardening, applied to both containers:
 
 **Idempotency.** `POST /runs` requires an `Idempotency-Key` header, which is unique per project and kept for 24 h. Repeating a request with the same key and the same body returns the original run. The same key with a different body returns `409`. Executions are keyed by `(run_id, scenario_id)`, so a scenario is never executed twice in one run.
 
-**Crash recovery.** On startup, any run left in `running`, `verifying` or `reviewing` is marked `failed` (`interrupted`), and its unfinished executions become INCONCLUSIVE.
+**Crash recovery.** On startup, any run left in `running`, `verifying` or `reviewing` is marked `failed` (`interrupted`), and its unfinished executions become INCONCLUSIVE. Runs still `queued` are re-enqueued, since nothing ran for them. Orphaned sandbox containers and networks carrying the `bbj.execution` label are removed (`DockerSandboxRunner.sweep_orphans`).
+
+**Implementation (Phase 6).**
+- `orchestrator/run_service.py`: a single worker thread processes runs in order.
+- Each execution's tool calls, artifacts, check results, verdict and finding are persisted in **one transaction**. If the write fails, the execution becomes `error`/INCONCLUSIVE, never passed.
+- The per-execution timeout is capped by the run's remaining time (`BBJ_RUN_TIMEOUT_S`).
+- Docker lost mid-run marks the run `failed` (`sandbox_unavailable`), and the remaining executions become INCONCLUSIVE.
+- `POST /runs` holds a process-local lock around the one-active-run check and the insert.
 
 **Readiness.** `GET /ready` checks that the DB is writable, the Docker daemon responds and the sandbox images are present. If Docker is missing, run creation returns `503 sandbox_unavailable`.
 

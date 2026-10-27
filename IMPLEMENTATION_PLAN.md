@@ -138,6 +138,12 @@
 
 ## Phase 6: Verification engine, findings, persistence, API · **Must** · ~3 h (slice) + ~4 h
 - **Goal:** verdicts, severity, findings, DB, run lifecycle, and the API from API.md.
+- **Done (Phase 6):**
+  - SQLAlchemy models plus Alembic `0001` with 28 CHECKs, repositories and the state machine.
+  - Run service and worker, with idempotent run creation, cancellation, run timeout, crash recovery and orphan sweep.
+  - Target, contract, scenario, run, execution, artifact, finding and JSON report endpoints, with audit events, rate limits and body limits.
+  - `bbj` CLI with `seed`, `db upgrade`, `run`, `status`, `report` and `cancel`.
+  - Target `PATCH`, regression export and retest remain in Phase 8, and the HTML report in Phase 9.
 - **Tasks:**
   - **For the slice:**
     - ~~`verdict.py` and `severity.py`~~ (done early, in Phase 3, because they enforce "LLM output cannot override deterministic rules");

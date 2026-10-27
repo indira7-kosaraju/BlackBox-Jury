@@ -69,16 +69,26 @@ class _FakeRunner:
         {"docker": "unreachable", "images": "unknown"},
     ],
 )
-def test_ready_reports_not_ready_honestly(
+def test_ready_reflects_live_checks(
     app: FastAPI, client: TestClient, auth_headers: dict[str, str], sandbox: dict[str, str]
 ) -> None:
-    # No database until Phase 6, so readiness is never claimed even if Docker is fine.
+    # Ready only when the database, Docker and the images are all ok.
     app.state.runner = _FakeRunner(sandbox)
     resp = client.get("/api/v1/ready", headers=auth_headers)
-    assert resp.status_code == 503
+    all_ok = sandbox == {"docker": "ok", "images": "ok"}
+    assert resp.status_code == (200 if all_ok else 503)
     body = resp.json()
-    assert body["status"] == "not_ready"
-    assert body["checks"] == {"database": "not_configured", **sandbox}
+    assert body["status"] == ("ready" if all_ok else "not_ready")
+    assert body["checks"] == {"database": "ok", **sandbox}
+
+
+def test_ready_reports_database_down(
+    app: FastAPI, client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    app.state.db.engine.dispose()
+    app.state.db.ping = lambda: False  # type: ignore[method-assign]
+    body = client.get("/api/v1/ready", headers=auth_headers).json()
+    assert body["status"] == "not_ready" and body["checks"]["database"] == "unreachable"
 
 
 def test_unknown_route_uses_error_schema(client: TestClient) -> None:
@@ -117,9 +127,9 @@ def test_validation_error_does_not_echo_input(settings: Settings) -> None:
     assert "should-not-echo" not in resp.text
 
 
-def test_docs_only_in_dev() -> None:
-    prod = create_app(Settings(api_token=TEST_TOKEN, env="prod"))  # type: ignore[arg-type]
-    dev = create_app(Settings(api_token=TEST_TOKEN, env="dev"))  # type: ignore[arg-type]
+def test_docs_only_in_dev(settings: Settings) -> None:
+    prod = create_app(settings.model_copy(update={"env": "prod"}))
+    dev = create_app(settings.model_copy(update={"env": "dev"}))
     with TestClient(prod) as c:
         assert c.get("/docs").status_code == 404
         assert c.get("/openapi.json").status_code == 404

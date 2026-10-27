@@ -35,12 +35,12 @@ def health() -> HealthResponse:
 def ready(request: Request, _: AuthPrincipal) -> JSONResponse:
     """Readiness. Reports ready only when every dependency check is ``ok``.
 
-    Docker and sandbox images are checked live. The database arrives in Phase 6,
-    so until then this honestly reports ``not_ready``.
+    The database, Docker and the sandbox images are all checked live.
     """
     sandbox = request.app.state.runner.readiness()
+    db = getattr(request.app.state, "db", None)
     checks: dict[str, CheckStatus] = {
-        "database": "not_configured",
+        "database": "ok" if db is not None and db.ping() else "unreachable",
         "docker": sandbox["docker"],
         "images": sandbox["images"],
     }
