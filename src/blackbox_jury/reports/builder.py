@@ -12,10 +12,19 @@ import json
 from collections.abc import Sequence
 from typing import Any
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from blackbox_jury.db import repo
-from blackbox_jury.db.models import Execution, Finding, RegressionTest, Run, ScenarioRow
+from blackbox_jury.db.models import (
+    Execution,
+    Finding,
+    JuryReview,
+    ModelCall,
+    RegressionTest,
+    Run,
+    ScenarioRow,
+)
 from blackbox_jury.orchestrator.state_machine import RUN_TERMINAL
 from blackbox_jury.verifier.severity import SEVERITY_RANK
 
@@ -101,6 +110,35 @@ def _diff_or_none(s: Session, execution_id: str) -> list[dict[str, Any]] | None:
     return state_diff(before, after) if before is not None and after is not None else None
 
 
+def jury_view(s: Session, execution_id: str) -> list[dict[str, Any]]:
+    """Stored jury reviews for an execution's finding. MODEL_ANALYSIS, advisory only."""
+    finding = repo.finding_for_execution(s, execution_id)
+    if finding is None:
+        return []
+    rows = s.execute(
+        select(JuryReview, ModelCall)
+        .join(ModelCall, JuryReview.model_call_id == ModelCall.id)
+        .where(JuryReview.finding_id == finding.id)
+        .order_by(JuryReview.id)
+    ).all()
+    out = []
+    for review, call in rows:
+        output = dict(review.output or {})
+        if review.role == "counter_reviewer" and "supports_review" in output:
+            output["supports_verdict"] = output["supports_review"]
+        out.append(
+            {
+                "role": review.role,
+                "provenance": "MODEL_ANALYSIS",
+                "status": review.status,
+                "model": call.model,
+                "prompt_version": call.prompt_version,
+                "output": output or None,
+            }
+        )
+    return out
+
+
 def execution_view(s: Session, exe: Execution, scenario: ScenarioRow) -> dict[str, Any]:
     checks = repo.check_results(s, exe.id)
     calls = repo.tool_calls(s, exe.id)
@@ -147,7 +185,7 @@ def execution_view(s: Session, exe: Execution, scenario: ScenarioRow) -> dict[st
         ],
         "state_diff": _diff_or_none(s, exe.id),
         "evidence_problems": exe.evidence_problems or [],
-        "jury": [],  # Phase 7: MODEL_ANALYSIS, advisory only
+        "jury": jury_view(s, exe.id),
     }
 
 
@@ -183,7 +221,29 @@ def build_report(s: Session, run: Run) -> dict[str, Any]:
         for e in executions
         if scenarios[e.id].category == "benign"
     ]
-    notes: list[str] = ["Jury not run (no model provider configured)."]
+    calls = (
+        s.scalar(
+            select(func.count())
+            .select_from(ModelCall)
+            .where(
+                ModelCall.id.in_(
+                    select(JuryReview.model_call_id)
+                    .join(Finding, JuryReview.finding_id == Finding.id)
+                    .where(Finding.run_id == run.id)
+                )
+            )
+        )
+        or 0
+    )
+    notes: list[str] = (
+        [
+            f"Jury: {calls} model review(s) recorded. "
+            "Model analysis is advisory and never changes a "
+            "deterministic verdict."
+        ]
+        if calls
+        else ["Jury not run (no model provider configured, or nothing to review)."]
+    )
     inconclusive = [e for e in executions if e.verdict == "INCONCLUSIVE"]
     if inconclusive:
         reasons = sorted({e.inconclusive_reason or "unknown" for e in inconclusive})

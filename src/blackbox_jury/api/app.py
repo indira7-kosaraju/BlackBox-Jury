@@ -24,6 +24,7 @@ from blackbox_jury.core.ratelimit import RateLimiter
 from blackbox_jury.core.redaction import Redactor
 from blackbox_jury.db import repo
 from blackbox_jury.db.session import Database, upgrade
+from blackbox_jury.jury.provider import LLMProvider, make_provider
 from blackbox_jury.orchestrator.run_service import RunService, Worker
 from blackbox_jury.sandbox.docker_runner import DockerSandboxRunner
 from blackbox_jury.sandbox.runner import SandboxRunner
@@ -39,8 +40,9 @@ def create_app(
     settings: Settings | None = None,
     runner: SandboxRunner | None = None,
     inline_worker: bool = False,
+    provider: LLMProvider | None = None,
 ) -> FastAPI:
-    """``runner`` / ``inline_worker`` are injection points for tests only."""
+    """``runner`` / ``inline_worker`` / ``provider`` are injection points for tests only."""
     settings = settings or get_settings()
     redactor = Redactor(settings.secret_values())
     configure_logging(settings.log_level, redactor)
@@ -53,7 +55,13 @@ def create_app(
             app.state.project_id = repo.ensure_project(s, "default").id
         app.state.db = db
         app.state.base_seed = load_base_seed(settings.seed_path)
-        service = RunService(db, app.state.runner, settings, redactor, app.state.base_seed)
+        llm = provider or make_provider(
+            settings.llm_provider,
+            settings.llm_model,
+            settings.llm_timeout_s,
+            settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None,
+        )
+        service = RunService(db, app.state.runner, settings, redactor, app.state.base_seed, llm)
         worker = Worker(service, inline=inline_worker)
         app.state.service, app.state.worker = service, worker
         for run_id in service.recover():

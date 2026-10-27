@@ -249,7 +249,19 @@ class LLMProvider(Protocol):
 ```
 
 - `NullProvider` is the default. It returns `skipped`, so the jury is marked "not run".
-- The concrete provider is added in the prompt-13 phase once decision D5 is made. Credentials come only from env vars.
+- **`AnthropicProvider` (Phase 7, opt-in):** the official `anthropic` SDK, installed via the optional `llm` extra and imported lazily.
+  - Model `claude-opus-5-5`, with `output_config.format` as a JSON schema and explicit `effort: medium`.
+  - Server-side refusal fallback (`fallbacks: "default"`).
+  - SDK retries (`max_retries=2`) and a timeout (`BBJ_LLM_TIMEOUT_S`).
+  - Every response is re-validated against our strict Pydantic model. Errors are mapped to `timeout`, `rate_limited`, `error` or `malformed`, and the provider never raises.
+  - Credentials come from `BBJ_ANTHROPIC_API_KEY`, which is redacted, or from the SDK's own resolution.
+- **Jury flow (`jury/reviewer.py`, wired in `run_service._review`):**
+  - After all executions are verified, the run moves to `reviewing`.
+  - CONFIRMED findings and NOT_REPRODUCED attack executions get a reviewer call and an independent counter-reviewer call. Controls are skipped.
+  - A reviewer `concern` becomes an `AdvisoryFlag` only if all of its citations exist in the evidence **and** the counter-reviewer supports the review.
+  - The verdict is recomputed only through `decide_verdict`, so CONFIRMED cannot change. An assertion guards this, and a test has a "false positive" jury that changes nothing.
+  - `jury/` never imports `verifier/` (boundary test).
+  - Jury rows are stored only when a finding exists (DATABASE.md `jury_reviews.finding_id`). Every model call is stored in `model_calls`.
 - Prompts are versioned files: `jury/prompts/reviewer_v1.md` and `jury/prompts/counter_v1.md`. Every call stores a `model_calls` row with provider, model, prompt id and version, the request hash, latency, status and token counts.
 - Evidence is sent **redacted and wrapped in delimiters**, with an instruction that it is untrusted data. Output is validated against a Pydantic schema. If it is malformed, the review gets `status=malformed` and the verdict is unaffected.
 - Scenario generation (stretch) uses the same provider. Generated scenarios must pass the schema, must reference only known tools, checks and seed records, and are stored with `source=generated`.

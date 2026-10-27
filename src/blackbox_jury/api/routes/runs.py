@@ -26,6 +26,11 @@ router = APIRouter()
 _create_lock = threading.Lock()  # single process: serialise the active-run check + insert
 
 
+def jury_status(s: Any, run: Run) -> str:
+    reviewed = sum(1 for e in repo.executions_for_run(s, run.id) if e.status == "reviewed")
+    return "completed" if reviewed else ("in_progress" if run.status == "reviewing" else "not_run")
+
+
 def run_out(s: Any, run: Run) -> dict[str, Any]:
     totals = repo.totals(s, run.id)
     return {
@@ -42,7 +47,7 @@ def run_out(s: Any, run: Run) -> dict[str, Any]:
         "started_at": run.started_at,
         "finished_at": run.finished_at,
         "totals": totals,
-        "jury": "not_run",
+        "jury": jury_status(s, run),
         "links": {"self": f"/api/v1/runs/{run.id}", "report": f"/api/v1/runs/{run.id}/report"},
     }
 

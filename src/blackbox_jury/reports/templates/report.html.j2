@@ -189,11 +189,13 @@ ol, ul { padding-left:20px; }
     {% for j in e.jury %}
     <div class="model card">
       <span class="prov prov-model">MODEL ANALYSIS</span> <span class="muted">— advisory; cannot change the verdict · {{ j.role }} · {{ j.model }} · {{ j.prompt_version }} · status {{ j.status }}</span>
-      {% if j.output %}
-        <p>{{ j.output.summary }}</p>
-        {% if j.output.root_cause %}<p><strong>Likely root cause:</strong> {{ j.output.root_cause }}</p>{% endif %}
-        {% if j.output.suggested_severity %}<p>Suggested severity (model): {{ j.output.suggested_severity }} — rule-based severity above is authoritative.</p>{% endif %}
-        {% if j.output.supports_verdict is defined and j.output.supports_verdict is not none %}<p>Counter-review supports the cited evidence: {{ "yes" if j.output.supports_verdict else "no" }}</p>{% endif %}
+      {% if j.output %}{% set o = j.output %}
+        <p>{{ o.get("summary", "") }}</p>
+        {% if o.get("root_cause") %}<p><strong>Likely root cause:</strong> {{ o.get("root_cause") }}</p>{% endif %}
+        {% if o.get("suggested_severity") %}<p>Suggested severity (model): {{ o.get("suggested_severity") }} — rule-based severity above is authoritative.</p>{% endif %}
+        {% if o.get("concern") %}<p><strong>Concern raised:</strong> {{ o.get("concern") }}</p>{% endif %}
+        {% if o.get("supports_verdict") is not none %}<p>Counter-review supports the cited evidence: {{ "yes" if o.get("supports_verdict") else "no" }}</p>{% endif %}
+        {% if o.get("unsupported_points") %}<p>Unsupported points: {{ o.get("unsupported_points")|join("; ") }}</p>{% endif %}
       {% endif %}
     </div>
     {% else %}<p class="muted">Jury not run.</p>{% endfor %}

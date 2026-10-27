@@ -171,6 +171,12 @@
   - **FULL:** all 10 scenarios run through the API with correct verdicts.
 
 ## Phase 7: Independent jury review and counter-review · **Should** · ~4 h (time-boxed)
+- **Done (Phase 7):**
+  - `LLMProvider` with `NullProvider` (the default) and an opt-in `AnthropicProvider` (`claude-opus-5-5`, structured outputs, refusal fallback).
+  - Versioned prompts `reviewer_v1` and `counter_v1`.
+  - Jury review and counter-review are wired into the run lifecycle; a concern becomes an advisory flag only with valid citations and counter-reviewer agreement.
+  - Results appear in `model_calls`, `jury_reviews`, and the JSON and HTML reports.
+  - 26 tests with a scripted provider and a fake SDK client; no live API call was made.
 - **Goal:** advisory model analysis that is stored and shown, and never authoritative.
 - **Tasks:**
   - the `LLMProvider` protocol and `NullProvider`;

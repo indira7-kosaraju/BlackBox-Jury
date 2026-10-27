@@ -255,7 +255,7 @@ DESIGN.md specifies this report. An interactive dashboard is a stretch goal.
   - **Optional `llm` mode:** the same tools driven by an LLM. It is non-deterministic, so it needs repeated runs.
 
   **[DECISION D4 — approved]** The scripted modes are the demo default.
-- **LLM provider:** used only for optional scenario variants and the jury, through a provider abstraction that records the model id and prompt version. **[DECISION D5 — PENDING]** Which provider, and whether an API key is available. Only redacted synthetic evidence may be sent to it. Without a provider, the system still produces deterministic verdicts.
+- **LLM provider:** used only for optional scenario variants and the jury, through a provider abstraction that records the model id and prompt version. **[DECISION D5 — resolved in Phase 7, without asking, per the team's instruction to proceed]** `NullProvider` is the default: the jury is skipped and the system runs offline. Anthropic Claude (`claude-opus-5-5`) is available as an opt-in, via `BBJ_LLM_PROVIDER=anthropic` plus credentials. A key is not required for the MVP. Only redacted synthetic evidence may be sent to it. Without a provider, the system still produces deterministic verdicts.
 - **MCP:** stretch goal, not in MVP.
 
 ## 13. System states
@@ -352,7 +352,7 @@ All demo results are labelled **synthetic**.
 | D2 | Single local API token, no auth provider | Approved |
 | D3 | API + CLI + static HTML report; no dashboard in MVP | Approved |
 | D4 | Scripted deterministic mock target as demo default | Approved |
-| D5 | LLM provider and API key availability | **Pending** |
+| D5 | LLM provider and API key availability | Resolved: default none; Anthropic opt-in |
 | D6 | Docker sandbox, no host fallback | Approved (Docker Desktop must be started) |
 | D7 | Custom orchestration layer instead of LangGraph | Approved |
 | D8 | Python 3.12 via uv | Approved |

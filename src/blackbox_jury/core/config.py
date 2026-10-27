@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     docker_timeout_s: float = Field(default=20.0, gt=0, le=120)
     run_timeout_s: float = Field(default=600.0, gt=0, le=3600)
 
+    # Jury (Phase 7, decision D5): advisory LLM review, off by default. Only redacted,
+    # synthetic evidence is ever sent. With "anthropic", BBJ_ANTHROPIC_API_KEY is used if
+    # set; otherwise the SDK resolves credentials itself (ANTHROPIC_API_KEY, `ant` profile).
+    llm_provider: Literal["none", "anthropic"] = "none"
+    llm_model: str = Field(default="claude-opus-5-5", pattern=r"^[a-z0-9.-]{3,64}$")
+    llm_timeout_s: float = Field(default=120.0, gt=0, le=600)
+    anthropic_api_key: SecretStr | None = None
+
     # Storage and demo inputs (paths relative to the working directory).
     database_url: str = Field(default="sqlite:///./data/bbj.db", pattern=r"^sqlite:///")
     seed_path: Path = Path("seeds/synthetic_store.json")
@@ -60,7 +68,10 @@ class Settings(BaseSettings):
 
     def secret_values(self) -> list[str]:
         """Raw secret values the redactor must mask wherever they appear."""
-        return [self.api_token.get_secret_value()]
+        values = [self.api_token.get_secret_value()]
+        if self.anthropic_api_key is not None:
+            values.append(self.anthropic_api_key.get_secret_value())
+        return values
 
 
 @lru_cache(maxsize=1)

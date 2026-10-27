@@ -19,6 +19,7 @@ import logging
 import queue
 import threading
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -35,14 +36,19 @@ from blackbox_jury.db.models import (
     EvidenceArtifact,
     Execution,
     Finding,
+    JuryReview,
+    ModelCall,
     Run,
     ScenarioRow,
     ToolCallEventRow,
 )
 from blackbox_jury.db.session import Database, utcnow
 from blackbox_jury.evidence.collector import canonical_json, sha256_hex
+from blackbox_jury.jury.provider import LLMProvider, ModelResult, NullProvider
+from blackbox_jury.jury.reviewer import JuryResult, JuryVerdictInput, review_execution
 from blackbox_jury.orchestrator.pipeline import ExecutionResult, execute_scenario
 from blackbox_jury.orchestrator.state_machine import EXECUTION_TERMINAL
+from blackbox_jury.reports.builder import execution_view
 from blackbox_jury.sandbox.runner import (
     CancelToken,
     SandboxLimits,
@@ -50,6 +56,8 @@ from blackbox_jury.sandbox.runner import (
     SandboxUnavailableError,
 )
 from blackbox_jury.scenarios.schema import Scenario
+from blackbox_jury.verifier.models import CheckResult
+from blackbox_jury.verifier.verdict import AdvisoryFlag, decide_verdict
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +69,14 @@ CATEGORY_LABELS = {
     "duplicate_operation": "Duplicate operation",
     "false_success_claim": "False success claim",
     "benign": "Benign control",
+}
+_REVIEW_STATUS = {
+    "ok": "ok",
+    "malformed": "malformed",
+    "timeout": "error",
+    "rate_limited": "error",
+    "error": "error",
+    "skipped": "skipped",
 }
 _STATUS_FOR_OUTCOME = {"timed_out": "timed_out", "cancelled": "cancelled", "sandbox_error": "error"}
 
@@ -80,7 +96,9 @@ class RunService:
         settings: Settings,
         redactor: Redactor,
         base_seed: dict[str, Any],
+        provider: LLMProvider | None = None,
     ) -> None:
+        self.provider: LLMProvider = provider or NullProvider()
         self.db = db
         self.runner = runner
         self.settings = settings
@@ -225,6 +243,13 @@ class RunService:
                 final_status = "cancelled"
                 break
 
+        current = "running"
+        if final_status == "completed" and not isinstance(self.provider, NullProvider):
+            with self.db.session() as s:
+                repo.transition_run(s, run_id, "running", "reviewing")
+            current = "reviewing"
+            if not self._review(run_id):
+                final_status = "cancelled"
         with self.db.session() as s:
             if final_status == "cancelled":
                 self._finish_pending(s, run_id, "cancelled", "cancelled")
@@ -233,8 +258,150 @@ class RunService:
             elif final_status == "failed":
                 self._finish_pending(s, run_id, "error", "sandbox_error")
             repo.transition_run(
-                s, run_id, "running", final_status, status_reason=reason, finished_at=utcnow()
+                s, run_id, current, final_status, status_reason=reason, finished_at=utcnow()
             )
+
+    # -- jury (advisory) -----------------------------------------------------------------
+
+    def _review(self, run_id: str) -> bool:
+        """Review CONFIRMED findings and NOT_REPRODUCED attack executions.
+
+        Returns False if the run was cancelled during review. Deterministic verdicts are
+        recomputed only through ``decide_verdict`` with advisory flags, which cannot change
+        CONFIRMED; a jury failure never fails the run.
+        """
+        with self.db.session() as s:
+            items = [
+                (exe.id, exe.verdict)
+                for exe in repo.executions_for_run(s, run_id)
+                if exe.status == "verified"
+                and exe.verdict in ("CONFIRMED", "NOT_REPRODUCED")
+                and s.get_one(ScenarioRow, exe.scenario_id).category != "benign"
+            ]
+        for execution_id, verdict_before in items:
+            with self.db.session() as s:
+                if repo.is_cancel_requested(s, run_id):
+                    return False
+                exe = s.get_one(Execution, execution_id)
+                view = execution_view(s, exe, s.get_one(ScenarioRow, exe.scenario_id))
+                checks = repo.check_results(s, execution_id)
+            failed = [c.check_id for c in checks if c.outcome == "FAIL"]
+            try:
+                jury = review_execution(
+                    JuryVerdictInput(view, verdict_before or "", failed),
+                    self.provider,
+                    self.redactor,
+                )
+            except Exception:
+                logger.exception("jury review failed", extra={"component": "jury"})
+                continue
+            self._persist_review(run_id, execution_id, verdict_before or "", checks, jury)
+        return True
+
+    def _persist_review(
+        self,
+        run_id: str,
+        execution_id: str,
+        verdict_before: str,
+        checks: Sequence[CheckResultRow],
+        jury: JuryResult,
+    ) -> None:
+        flags = [AdvisoryFlag(source="jury_reviewer", concern=c) for c in jury.concerns]
+        decision = decide_verdict(
+            results=[
+                CheckResult.model_validate(
+                    {
+                        "check_id": c.check_id,
+                        "outcome": c.outcome,
+                        "rule_ref": c.rule_ref,
+                        "evidence_refs": tuple(c.evidence_refs),
+                        "message": c.message[:2000],
+                        "side_effect": bool(c.side_effect),
+                        "verifier_version": c.verifier_version,
+                    }
+                )
+                for c in checks
+            ],
+            execution_outcome="completed",
+            evidence_complete=True,  # only verified CONFIRMED/NOT_REPRODUCED executions get here
+            advisory_flags=flags,
+        )
+        if verdict_before == "CONFIRMED" and decision.verdict != "CONFIRMED":
+            raise AssertionError("jury must never change a CONFIRMED verdict")
+        now = utcnow()
+        with self.db.session() as s:
+            exe = s.get_one(Execution, execution_id)
+            calls = [("jury_review", "reviewer", jury.reviewer)]
+            if jury.counter is not None:
+                calls.append(("jury_counter", "counter_reviewer", jury.counter))
+            call_ids = [
+                (role, res, self._record_call(s, purpose, res, now)) for purpose, role, res in calls
+            ]
+            finding = repo.finding_for_execution(s, execution_id)
+            fields: dict[str, Any] = {}
+            if decision.verdict != exe.verdict:  # NOT_REPRODUCED -> INCONCLUSIVE (jury_only_flag)
+                fields = {"verdict": decision.verdict, "inconclusive_reason": decision.reason}
+                scenario = repo.scenario_model(s.get_one(ScenarioRow, exe.scenario_id))
+                finding = Finding(
+                    id=new_id("fnd"),
+                    execution_id=execution_id,
+                    run_id=run_id,
+                    title=f"Needs human review: {scenario.title}"[:200],
+                    category=scenario.category,
+                    verdict="INCONCLUSIVE",
+                    severity=None,
+                    failed_check_ids=[],
+                    repro_steps=[
+                        "Model analysis raised an evidence-backed concern not covered by "
+                        "the deterministic checks; review the jury notes and evidence."
+                    ],
+                    created_at=now,
+                )
+                s.add(finding)
+                s.flush()
+            if finding is not None:
+                previous: str | None = None
+                for role, res, call_id in call_ids:
+                    review_id = new_id("jur")
+                    s.add(
+                        JuryReview(
+                            id=review_id,
+                            finding_id=finding.id,
+                            role=role,
+                            responds_to_id=previous if role == "counter_reviewer" else None,
+                            model_call_id=call_id,
+                            status=_REVIEW_STATUS[res.status],
+                            output=self.redactor.redact(res.output.model_dump())
+                            if res.output
+                            else None,
+                            created_at=now,
+                        )
+                    )
+                    s.flush()
+                    previous = review_id
+            repo.transition_execution(s, execution_id, "verified", "reviewed", **fields)
+
+    @staticmethod
+    def _record_call(s: Session, purpose: str, res: ModelResult, now: str) -> str:
+        call_id = new_id("mdl")
+        s.add(
+            ModelCall(
+                id=call_id,
+                provider=res.provider,
+                model=res.model,
+                purpose=purpose,
+                prompt_id=res.prompt_id,
+                prompt_version=res.prompt_version,
+                request_sha256=res.request_sha256,
+                status=res.status,
+                latency_ms=res.latency_ms,
+                input_tokens=res.input_tokens,
+                output_tokens=res.output_tokens,
+                retries=res.retries,
+                created_at=now,
+            )
+        )
+        return call_id
 
     # -- persistence ---------------------------------------------------------------------
 

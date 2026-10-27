@@ -6,7 +6,7 @@ Blackbox Jury is a security-first testing system for tool-using AI agents. It ru
 
 > Results reflect only the scenarios executed. Blackbox Jury does not establish that any agent is secure.
 
-**Status:** Phase 9 (static HTML report). The jury (Phase 7) is next. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+**Status:** Phases 1–9 complete (jury optional, off by default). Phase 10 (QA, audit, readiness) in progress. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 ## Project documents
 
@@ -86,6 +86,10 @@ All configuration comes from environment variables, or from `.env`, which is git
 | `BBJ_ALLOWED_TARGET_IMAGES` | no | `["bbj-refundbot:0.1.0"]` | JSON list. The only target images that may be executed. |
 | `BBJ_EXEC_TIMEOUT_S` | no | `30` | Wall-clock limit per scenario execution (max 300) |
 | `BBJ_DOCKER_TIMEOUT_S` | no | `20` | Docker API call timeout |
+| `BBJ_LLM_PROVIDER` | no | `none` | `none` or `anthropic`. Turns on the advisory jury; needs `uv sync --extra llm`. |
+| `BBJ_LLM_MODEL` | no | `claude-opus-5-5` | Model used by the jury |
+| `BBJ_LLM_TIMEOUT_S` | no | `120` | Timeout per jury call |
+| `BBJ_ANTHROPIC_API_KEY` | no | – | Optional. If unset, the SDK resolves credentials itself (`ANTHROPIC_API_KEY`, `ant auth login`). Redacted from logs. |
 | `BBJ_RUN_TIMEOUT_S` | no | `600` | Wall-clock limit for a whole run (max 3600) |
 | `BBJ_DATABASE_URL` | no | `sqlite:///./data/bbj.db` | SQLite only |
 | `BBJ_SEED_PATH` | no | `seeds/synthetic_store.json` | Synthetic base seed |
@@ -107,7 +111,7 @@ All configuration comes from environment variables, or from `.env`, which is git
 
 ## Known issues
 
-- **Starlette test-client deprecation warning (dev only, accepted).** Starlette 1.10's `TestClient` prefers the new `httpx2` package. It still fully supports `httpx`, but warns on import. We keep `httpx` for now rather than adopt a new, unvetted dependency. The warning is filtered in `pyproject.toml` with a filter that matches only that exact message, so other deprecations still show. Revisit this when upgrading FastAPI or Starlette.
+- **Starlette test-client warning (resolved in Phase 7).** The official `anthropic` SDK (optional `llm` extra, also in dev) depends on `httpx2`, which Starlette's `TestClient` prefers. The `httpx` dev dependency and the warning filter were removed.
 - **Editable-install `.pth` file on macOS.** macOS can set the "hidden" flag on files in `.venv`, and Python 3.12.15+ skips hidden `.pth` files. To avoid depending on that file, pytest uses `pythonpath = ["src"]` and `make run` passes `--app-dir src`.
 
 ## Sandbox images

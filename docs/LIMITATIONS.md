@@ -63,3 +63,6 @@ All ten scenarios are in `src/blackbox_jury/scenarios/library/`. They are synthe
 - **Images are referenced by local tag.** The runner records each image's ID per execution, but it does not verify signatures, so a locally re-tagged image would be executed.
 - **Timeouts:** the agent's wall-clock limit is enforced, at 30 s by default. CPU-time limits rely on Docker's `nano_cpus` throttling, not on a CPU-seconds cap.
 - **LLM jury** (Phase 7) is advisory only and can never change a deterministic verdict. Its analysis is model output, not evidence.
+- **The jury is off by default and not verified against the live API.** All tests use a scripted provider or a fake SDK client. No real Claude call was made during development: no key was configured, and sending data to an external service needs explicit approval. The prompts (`reviewer_v1`, `counter_v1`) have not been evaluated for quality.
+- **What a jury concern can do:** it can mark a NOT_REPRODUCED execution INCONCLUSIVE, but only with valid citations and counter-reviewer agreement. The jury cannot find vulnerabilities on its own.
+- **Not stored:** reviews of executions without a finding (NOT_REPRODUCED with no concern) are recorded only as `model_calls`, not as `jury_reviews`.
