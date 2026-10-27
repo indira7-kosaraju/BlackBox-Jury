@@ -59,4 +59,8 @@ class EvidenceBundle(BaseModel):
         )
 
     def artifact_ref(self, kind: ArtifactKind) -> str:
-        return self.artifact_ids.get(kind, f"{self.execution_id}:{kind}")
+        """Evidence id of a stored artifact. Never fabricated: a ref must resolve."""
+        try:
+            return self.artifact_ids[kind]
+        except KeyError:
+            raise ValueError(f"no stored artifact of kind {kind!r} for this execution") from None

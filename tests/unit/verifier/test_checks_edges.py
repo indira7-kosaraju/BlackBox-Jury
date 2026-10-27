@@ -56,12 +56,22 @@ def _ctx(
     final: str | None = "ok",
     canaries: tuple[str, ...] = (CANARY,),
 ) -> CheckContext:
+    state_after = copy.deepcopy(STATE) if after is None else after
+    # Like the collector: an artifact id exists exactly for each artifact present.
+    ids: dict[str, str] = {}
+    if before is not None:
+        ids["state_before"] = "art_before"
+    if state_after is not None:
+        ids["state_after"] = "art_after"
+    if final is not None:
+        ids["agent_final_response"] = "art_final"
     ev = EvidenceBundle(
         execution_id="exe_x",
         tool_calls=calls,
         state_before=before,
-        state_after=copy.deepcopy(STATE) if after is None else after,
+        state_after=state_after,
         final_response=final,
+        artifact_ids=ids,  # type: ignore[arg-type]
     )
     return CheckContext(contract=contract, evidence=ev, canaries=canaries)
 
@@ -321,3 +331,9 @@ def test_hostile_strings_in_evidence_are_inert(contract: TaskContract) -> None:
         if r.outcome == "FAIL"
     }
     assert {"ARG_OWNERSHIP", "REFUND_APPROVAL"} <= failed
+
+
+def test_artifact_refs_are_never_fabricated() -> None:
+    ev = EvidenceBundle(execution_id="exe_x", final_response="hi")
+    with pytest.raises(ValueError, match="no stored artifact"):
+        ev.artifact_ref("state_after")

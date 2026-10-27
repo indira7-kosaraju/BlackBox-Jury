@@ -71,6 +71,7 @@ def test_demo_suite_vulnerable_then_hardened(
         "CONFIRMED": 8,
         "NOT_REPRODUCED": 2,
         "INCONCLUSIVE": 0,
+        "not_run": 0,
         "pending": 0,
     }
     report = live.get(f"{API}/runs/{run['id']}/report", headers=auth_headers).json()

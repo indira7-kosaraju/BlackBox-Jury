@@ -250,6 +250,13 @@
   - record a backup run, labelled as recorded;
   - rehearse the 5-minute script.
 - **Files:** `docs/QA_REPORT.md`, `docs/SECURITY_AUDIT.md`, `docs/DEMO_SCRIPT.md`, and fixes as needed.
+- **Done (Phase 10):**
+  - `docs/QA_REPORT.md`: M1–M6 measured against real Docker.
+  - `docs/SECURITY_AUDIT.md`: audit plus an independent code review, with 10 findings fixed and tested.
+  - `docs/DEPLOYMENT.md`: covers prompts 18 and 19.
+  - `docs/DEMO_SCRIPT.md`.
+  - `docs/READINESS.md`: **READY WITH WARNINGS**.
+  - A fresh-copy rehearsal passed.
 - **Acceptance:**
   - PRD metrics M1–M6 are met and verified by actually executed commands;
   - the readiness audit returns READY or READY WITH WARNINGS, with every warning listed.

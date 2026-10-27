@@ -216,6 +216,7 @@ def test_totals_count_only_executed(db: Database, world: dict[str, Any]) -> None
             "CONFIRMED": 0,
             "NOT_REPRODUCED": 0,
             "INCONCLUSIVE": 0,
+            "not_run": 0,
             "pending": 1,
         }
 

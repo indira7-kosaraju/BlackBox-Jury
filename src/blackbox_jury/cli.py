@@ -28,7 +28,7 @@ app = typer.Typer(add_completion=False, no_args_is_help=True, help="Blackbox Jur
 db_app = typer.Typer(no_args_is_help=True, help="Database commands")
 app.add_typer(db_app, name="db")
 
-DEFAULT_API = "http://127.0.0.1:8000"
+DEFAULT_API = ""  # empty -> http://{BBJ_HOST}:{BBJ_PORT} from settings (env or .env)
 TERMINAL = {"completed", "failed", "cancelled", "timed_out"}
 REPORTS_DIR = Path("reports/out")
 _BADGE = {
@@ -37,7 +37,9 @@ _BADGE = {
     "INCONCLUSIVE": "◐ INCONCLUSIVE",
 }
 
-ApiOpt = Annotated[str, typer.Option("--api", help="API base URL (local only)")]
+ApiOpt = Annotated[
+    str, typer.Option("--api", help="API base URL (local only; default from BBJ_HOST/BBJ_PORT)")
+]
 JsonOpt = Annotated[bool, typer.Option("--json", help="Machine-readable output")]
 
 
@@ -84,10 +86,17 @@ def _api(
     body: dict[str, Any] | None = None,
     headers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    if not api:
+        settings = get_settings()
+        api = f"http://{settings.host}:{settings.port}"
     if not api.startswith(("http://127.0.0.1", "http://localhost")):
         raise typer.BadParameter("only a local API (127.0.0.1/localhost) is supported")
     token = get_settings().api_token.get_secret_value()
-    status, payload = _http(method, api.rstrip("/") + "/api/v1" + path, token, body, headers)
+    for _attempt in range(3):  # honour 429 Retry-After instead of failing mid-run
+        status, payload = _http(method, api.rstrip("/") + "/api/v1" + path, token, body, headers)
+        if status != 429 or method != "GET":
+            break
+        time.sleep(2)
     if status >= 400:
         raise ApiCallError(status, payload)
     return payload

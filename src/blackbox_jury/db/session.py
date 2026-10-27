@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -21,12 +22,20 @@ def utcnow() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds")
 
 
-def make_engine(url: str) -> Engine:
+def _db_file(url: str) -> Path | None:
     parsed = make_url(url)
     if parsed.get_backend_name() != "sqlite":
         raise ValueError("only SQLite is supported in the MVP")
-    if parsed.database and parsed.database != ":memory:":
-        Path(parsed.database).parent.mkdir(parents=True, exist_ok=True)
+    db_file = Path(parsed.database) if parsed.database and parsed.database != ":memory:" else None
+    if db_file is not None:
+        # Owner-only: evidence is synthetic, but still not world-readable. Created here so
+        # migrations work on a fresh checkout (no data/ directory yet).
+        db_file.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    return db_file
+
+
+def make_engine(url: str) -> Engine:
+    db_file = _db_file(url)
     engine = create_engine(url, connect_args={"check_same_thread": False, "timeout": 15})
 
     @event.listens_for(engine, "connect")
@@ -36,12 +45,17 @@ def make_engine(url: str) -> Engine:
         cur.execute("PRAGMA journal_mode = WAL")
         cur.execute("PRAGMA busy_timeout = 15000")
         cur.close()
+        if db_file is not None and db_file.exists():
+            for f in (db_file, Path(f"{db_file}-wal"), Path(f"{db_file}-shm")):
+                if f.exists():
+                    os.chmod(f, 0o600)
 
     return engine
 
 
 def upgrade(url: str) -> None:
     """Apply all migrations (``alembic upgrade head``) to ``url``."""
+    _db_file(url)
     cfg = Config()
     cfg.set_main_option("script_location", str(MIGRATIONS_DIR))
     cfg.set_main_option("sqlalchemy.url", url)

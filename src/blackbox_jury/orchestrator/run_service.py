@@ -88,6 +88,10 @@ class _Work:
     scenario_sha: str
 
 
+class JuryInvariantError(AssertionError):
+    """Raised if a jury result would change a CONFIRMED verdict (must never happen)."""
+
+
 class RunService:
     def __init__(
         self,
@@ -198,6 +202,11 @@ class RunService:
         deadline = time.monotonic() + self.settings.run_timeout_s
         final_status, reason = "completed", None
         for item in work:
+            # Install this execution's token BEFORE checking the flag, so a cancel that
+            # arrives in between signals the right token (not the finished previous one).
+            cancel = CancelToken()
+            with self._lock:
+                self._tokens[run_id] = cancel
             with self.db.session() as s:
                 if repo.is_cancel_requested(s, run_id):
                     final_status = "cancelled"
@@ -206,9 +215,6 @@ class RunService:
             if remaining <= 1:
                 final_status = "timed_out"
                 break
-            cancel = CancelToken()
-            with self._lock:
-                self._tokens[run_id] = cancel
             with self.db.session() as s:
                 repo.transition_execution(
                     s, item.execution_id, "pending", "running", started_at=utcnow()
@@ -228,6 +234,7 @@ class RunService:
                         exec_timeout_s=min(self.settings.exec_timeout_s, remaining)
                     ),
                     cancel=cancel,
+                    execution_id=item.execution_id,
                 )
                 self._persist(run_id, item, snapshot, contract.name, contract.version, result)
             except SandboxUnavailableError:
@@ -295,7 +302,14 @@ class RunService:
             except Exception:
                 logger.exception("jury review failed", extra={"component": "jury"})
                 continue
-            self._persist_review(run_id, execution_id, verdict_before or "", checks, jury)
+            try:
+                self._persist_review(run_id, execution_id, verdict_before or "", checks, jury)
+            except JuryInvariantError:
+                raise  # a CONFIRMED verdict would change: never swallow this
+            except Exception:
+                # Deterministic results are already final; a jury write failure must not
+                # fail the run. The execution simply stays 'verified' (not reviewed).
+                logger.exception("could not persist jury review", extra={"component": "jury"})
         return True
 
     def _persist_review(
@@ -327,7 +341,7 @@ class RunService:
             advisory_flags=flags,
         )
         if verdict_before == "CONFIRMED" and decision.verdict != "CONFIRMED":
-            raise AssertionError("jury must never change a CONFIRMED verdict")
+            raise JuryInvariantError("jury must never change a CONFIRMED verdict")
         now = utcnow()
         with self.db.session() as s:
             exe = s.get_one(Execution, execution_id)
@@ -490,10 +504,8 @@ class RunService:
                 repo.transition_execution(
                     s, item.execution_id, "running", _STATUS_FOR_OUTCOME[raw.outcome], **fields
                 )
-            needs_finding = decision.verdict == "CONFIRMED" or decision.reason in (
-                "verifier_error",
-                "jury_only_flag",
-            )
+            # (jury_only_flag findings are created during review, not here)
+            needs_finding = decision.verdict == "CONFIRMED" or decision.reason == "verifier_error"
             if needs_finding:
                 s.add(
                     Finding(

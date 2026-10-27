@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_PROJECT = "default"
 
 # API.md §1 rate limits (per token, per minute).
-RATE_LIMITS = {"run_create": 10, "generation": 5, "default": 120}
+# "default" covers status polling by the CLI (~2 requests/s during a run).
+RATE_LIMITS = {"run_create": 10, "generation": 5, "default": 600}
 
 _bearer = HTTPBearer(auto_error=False)
 

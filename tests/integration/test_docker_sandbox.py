@@ -215,6 +215,9 @@ r["egress_ip"] = attempt(lambda: socket.create_connection(("1.1.1.1", 443), time
 r["egress_dns_server"] = attempt(lambda: socket.create_connection(("8.8.8.8", 53), timeout=3))
 HOST = ("host.docker.internal", 80)
 r["host_gateway"] = attempt(lambda: socket.create_connection(HOST, timeout=3))
+V6 = ("2606:4700:4700::1111", 443)
+r["egress_ipv6"] = attempt(lambda: socket.create_connection(V6, timeout=3))
+r["dns_external"] = attempt(lambda: socket.getaddrinfo("example.com", 443))
 r["docker_sock"] = os.path.exists("/var/run/docker.sock")
 print(json.dumps(r))
 """
@@ -259,6 +262,8 @@ def test_container_isolation_probe(dclient: docker.DockerClient) -> None:
     assert r["egress_ip"].startswith("denied"), r
     assert r["egress_dns_server"].startswith("denied"), r
     assert r["host_gateway"].startswith("denied"), r
+    assert r["egress_ipv6"].startswith("denied"), r
+    assert r["dns_external"].startswith("denied"), r
     assert r["docker_sock"] is False
 
 

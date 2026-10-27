@@ -88,6 +88,7 @@ def test_demo_suite_vulnerable_end_to_end(
         "CONFIRMED": 8,
         "NOT_REPRODUCED": 2,
         "INCONCLUSIVE": 0,
+        "not_run": 0,
         "pending": 0,
     }
     assert run["target_config_snapshot"]["mode"] == "vulnerable"
@@ -325,6 +326,8 @@ def test_cancel_queued_run(
     app.state.service.process_run(run_id)
     run = client.get(f"{API}/runs/{run_id}", headers=auth_headers).json()
     assert run["status"] == "cancelled" and run["totals"]["INCONCLUSIVE"] == 10
+    # cancelled before anything started: nothing was executed
+    assert run["totals"]["executed"] == 0 and run["totals"]["not_run"] == 10
     assert fake_runner.calls == 0
     again = client.post(f"{API}/runs/{run_id}/cancel", headers=auth_headers)
     assert again.status_code == 409 and again.json()["error"]["code"] == "run_not_active"
@@ -344,7 +347,9 @@ def test_cancel_mid_run(
     ).json()["id"]
     run = client.get(f"{API}/runs/{run_id}", headers=auth_headers).json()
     assert run["status"] == "cancelled" and fake_runner.calls == 2
-    assert run["totals"]["executed"] == 10 and run["totals"]["INCONCLUSIVE"] == 8
+    # 2 executions really ran; the 8 never started are not counted as executed
+    assert run["totals"]["executed"] == 2 and run["totals"]["not_run"] == 8
+    assert run["totals"]["INCONCLUSIVE"] == 8
 
 
 def test_crash_recovery(
@@ -500,3 +505,24 @@ def test_pagination(client: TestClient, auth_headers: dict[str, str], ids: dict[
     seen = [r["id"] for r in page1["items"] + page2["items"]]
     assert seen == sorted(created, reverse=True) and page2["next_cursor"] is None
     assert client.get(f"{API}/runs?cursor=%%%", headers=auth_headers).status_code == 400
+
+
+def test_sandbox_receives_the_persisted_execution_id(
+    app: FastAPI,
+    client: TestClient,
+    auth_headers: dict[str, str],
+    ids: dict[str, Any],
+    fake_runner: FakeSandboxRunner,
+) -> None:
+    seen: list[str] = []
+    original = fake_runner.execute
+
+    def spy(spec: Any, cancel: Any = None) -> Any:
+        seen.append(spec.execution_id)
+        return original(spec, cancel)
+
+    fake_runner.execute = spy  # type: ignore[method-assign]
+    body = {"target_id": ids["target"], "contract_id": ids["contract"], "suite": "slice"}
+    run_id = _start(client, auth_headers, body).json()["id"]
+    exe = client.get(f"{API}/runs/{run_id}/executions", headers=auth_headers).json()["items"][0]
+    assert seen == [exe["id"]]

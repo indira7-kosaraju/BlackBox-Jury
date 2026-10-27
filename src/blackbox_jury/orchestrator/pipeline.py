@@ -50,10 +50,13 @@ def execute_scenario(
     redactor: Redactor,
     limits: SandboxLimits | None = None,
     cancel: CancelToken | None = None,
+    execution_id: str | None = None,
 ) -> ExecutionResult:
+    """``execution_id`` should be the persisted Execution.id so sandbox labels,
+    raw output and evidence all carry the same id."""
     task_input = build_task_input(scenario, mode, base_seed)
     spec = ExecutionSpec(
-        execution_id=new_id("exe"),
+        execution_id=execution_id or new_id("exe"),
         gateway_image=gateway_image,
         agent_image=agent_image,
         seed=build_seed(scenario, base_seed),

@@ -6,7 +6,7 @@ Blackbox Jury is a security-first testing system for tool-using AI agents. It ru
 
 > Results reflect only the scenarios executed. Blackbox Jury does not establish that any agent is secure.
 
-**Status:** Phases 1–9 complete (jury optional, off by default). Phase 10 (QA, audit, readiness) in progress. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+**Status:** MVP complete (Phases 1–10). Demo readiness: **READY WITH WARNINGS**. See [docs/READINESS.md](docs/READINESS.md). See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 ## Project documents
 
@@ -19,6 +19,8 @@ Blackbox Jury is a security-first testing system for tool-using AI agents. It ru
 | [API.md](API.md) | REST API |
 | [AGENTS.md](AGENTS.md) | Mandatory rules for contributors and AI coding agents |
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | 48-hour build plan |
+| [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | 5-minute demo script and fallbacks |
+| [docs/READINESS.md](docs/READINESS.md) · [docs/QA_REPORT.md](docs/QA_REPORT.md) · [docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md) · [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Readiness verdict, measured QA metrics, security audit and code review, operations and monitoring |
 | [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | **Known detection and coverage limitations.** Read this before interpreting any result. |
 
 ## Local setup
@@ -79,8 +81,8 @@ All configuration comes from environment variables, or from `.env`, which is git
 | `BBJ_API_TOKEN` | yes | – | Bearer token for all `/api/v1` routes. At least 32 characters. Placeholder values are rejected. |
 | `BBJ_API_ACTOR` | no | `local-admin` | Actor label recorded in audit events |
 | `BBJ_ENV` | no | `dev` | `dev`, `test` or `prod`. OpenAPI docs (`/docs`) are served only in `dev`. |
-| `BBJ_HOST` | no | `127.0.0.1` | Bind address used by `make run` |
-| `BBJ_PORT` | no | `8000` | Bind port used by `make run` |
+| `BBJ_HOST` | no | `127.0.0.1` | Bind address for `make run`; also the CLI's default API host |
+| `BBJ_PORT` | no | `8000` | Bind port for `make run`; also the CLI's default API port |
 | `BBJ_LOG_LEVEL` | no | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
 | `BBJ_GATEWAY_IMAGE` | no | `bbj-gateway:0.1.0` | Local tool-gateway image. Never pulled. |
 | `BBJ_ALLOWED_TARGET_IMAGES` | no | `["bbj-refundbot:0.1.0"]` | JSON list. The only target images that may be executed. |
@@ -107,6 +109,8 @@ All configuration comes from environment variables, or from `.env`, which is git
 | `make run` | start the API on `127.0.0.1:8000` |
 | `make images` | build the sandbox images `bbj-gateway:0.1.0` and `bbj-refundbot:0.1.0` (requires Docker) |
 | `make seed` / `make demo` | Seed the demo data and run the demo suite through the API (`make run` must be running) |
+| `make qa` | Measure the PRD success metrics against the real sandbox (writes `docs/qa/qa_metrics.json`) |
+| `make clean-demo` / `make clean-images` | Remove local demo data and leftover sandbox resources (asks first) / remove the sandbox images |
 | `make sandbox-smoke` | run one gateway + RefundBot pair in the hardened sandbox and print the evidence. Args: `scripts/sandbox_smoke.sh [vulnerable\|hardened] "message"`; optional `NOTE="..."` overrides order A-101's note. |
 
 ## Known issues

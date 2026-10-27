@@ -1,4 +1,4 @@
-.PHONY: install check lint format format-check typecheck test test-docker run images sandbox-smoke seed demo
+.PHONY: install check lint format format-check typecheck test test-docker run images sandbox-smoke seed demo qa clean-demo clean-images
 
 install:
 	uv sync
@@ -23,10 +23,9 @@ test:
 test-docker:
 	uv run pytest -m docker
 
-# Binds to 127.0.0.1 by default; reads BBJ_* from the environment or .env.
+# Host/port come from settings (environment or .env); default 127.0.0.1:8000.
 run:
-	PYTHONPATH=src uv run uvicorn --app-dir src --factory blackbox_jury.api.app:create_app \
-		--host $${BBJ_HOST:-127.0.0.1} --port $${BBJ_PORT:-8000}
+	PYTHONPATH=src uv run python -m blackbox_jury.serve
 
 # Sandbox images (stdlib-only, base pinned by digest). Requires Docker.
 IMAGE_TAG ?= 0.1.0
@@ -48,3 +47,21 @@ seed:
 # Requires the API running (`make run`) and Docker with images built.
 demo:
 	$(BBJ) run --suite demo
+
+# Measure PRD success metrics against the real sandbox (writes docs/qa/qa_metrics.json).
+qa:
+	PYTHONPATH=src uv run python scripts/qa_metrics.py
+
+# Shutdown/cleanup: remove local demo data (SQLite DB, reports) and any sandbox
+# containers/networks left behind. Touches only data/, reports/out/ and resources
+# labelled bbj.execution. Asks for confirmation first.
+clean-demo:
+	@printf "Delete data/ and reports/out/ (local demo DB and reports)? [y/N] "; read a; [ "$$a" = "y" ]
+	rm -rf data reports/out
+	@for c in $$(docker ps -aq --filter label=bbj.execution); do docker rm -f $$c; done
+	@for n in $$(docker network ls -q --filter label=bbj.execution); do docker network rm $$n; done
+	@echo "demo data and sandbox resources removed"
+
+# Remove the locally built sandbox images.
+clean-images:
+	-docker rmi bbj-gateway:$(IMAGE_TAG) bbj-refundbot:$(IMAGE_TAG)

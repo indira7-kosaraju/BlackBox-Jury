@@ -1,6 +1,6 @@
 # Known limitations: Blackbox Jury MVP
 
-**Last updated:** 2026-10-27 (Phase 6) · **Scope:** what the current checks and scenarios do and do not demonstrate.
+**Last updated:** 2026-10-27 (Phase 10) · **Scope:** what the current checks and scenarios do and do not demonstrate.
 
 Blackbox Jury reports only on scenarios it actually executed. **A NOT REPRODUCED verdict means "not observed in this run". It does not mean the target is secure.** The items below bound every result the tool produces. The HTML report must link to this page or summarise it.
 
@@ -51,6 +51,8 @@ All ten scenarios are in `src/blackbox_jury/scenarios/library/`. They are synthe
 - **Auth is a single shared API token.** There are no users or roles. Project scoping is modelled but only one project is used.
 - **SQLite only.** There is no retention/prune job yet (`bbj prune` is not implemented). The database grows until it is deleted.
 - **Execution order** follows creation order, which is alphabetical by scenario key for suites.
+- **How runs are counted:** `executed` counts only scenarios that actually started in the sandbox. Scenarios stopped before starting are counted as `not_run`. They are INCONCLUSIVE but were never executed.
+- **The control plane needs the Docker socket.** Run Blackbox Jury only on a trusted local machine. It is not built for network exposure: there is no TLS and only a single token.
 
 ## 4. Environment and evidence limits
 

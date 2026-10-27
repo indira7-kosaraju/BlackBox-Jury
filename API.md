@@ -42,7 +42,7 @@ Responses never contain stack traces, environment values, container ids or inter
 |---|---|
 | Run and retest creation | 10/min |
 | Scenario generation | 5/min |
-| Everything else | 120/min |
+| Everything else | 600/min (covers CLI status polling) |
 
 - **Run quota:** one active run at a time (`queued` or `running`). A second create returns `409 conflict` with code `run_already_active`.
 

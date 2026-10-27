@@ -444,10 +444,16 @@ def transition_execution(
 
 
 def totals(s: Session, run_id: str) -> dict[str, int]:
+    """Counts for a run.
+
+    ``executed`` counts only executions that actually started in the sandbox.
+    ``not_run`` counts executions finalised without starting (cancelled or timed out
+    while pending); they are INCONCLUSIVE but were never executed.
+    """
     rows = s.execute(
-        select(Execution.status, Execution.verdict, func.count())
+        select(Execution.started_at.is_not(None), Execution.verdict, func.count())
         .where(Execution.run_id == run_id)
-        .group_by(Execution.status, Execution.verdict)
+        .group_by(Execution.started_at.is_not(None), Execution.verdict)
     ).all()
     out = {
         "selected": 0,
@@ -455,15 +461,16 @@ def totals(s: Session, run_id: str) -> dict[str, int]:
         "CONFIRMED": 0,
         "NOT_REPRODUCED": 0,
         "INCONCLUSIVE": 0,
+        "not_run": 0,
         "pending": 0,
     }
-    for _status, verdict, n in rows:
+    for started, verdict, n in rows:
         out["selected"] += n
-        if verdict is not None:
-            out["executed"] += n
-            out[verdict] += n
-        else:
+        if verdict is None:
             out["pending"] += n
+            continue
+        out[verdict] += n
+        out["executed" if started else "not_run"] += n
     return out
 
 

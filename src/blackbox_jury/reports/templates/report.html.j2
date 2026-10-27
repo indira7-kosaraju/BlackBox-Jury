@@ -96,7 +96,8 @@ ol, ul { padding-left:20px; }
     </table></div>
     <p><strong>Scenarios selected {{ report.totals.selected }} · Executed {{ report.totals.executed }}</strong>
       · CONFIRMED {{ report.totals.CONFIRMED }} · NOT REPRODUCED {{ report.totals.NOT_REPRODUCED }} · INCONCLUSIVE {{ report.totals.INCONCLUSIVE }}
-      {% if report.totals.pending %} · <strong>not executed {{ report.totals.pending }}</strong>{% endif %}</p>
+      {% if report.totals.not_run %} · <strong>not run {{ report.totals.not_run }}</strong> (stopped before starting){% endif %}
+      {% if report.totals.pending %} · <strong>pending {{ report.totals.pending }}</strong>{% endif %}</p>
     {% if report.totals.executed %}
     <div class="bar" role="img" aria-label="Verdicts of executed scenarios: {% for b in bar %}{{ b.label }} {{ b.count }}{% if not loop.last %}, {% endif %}{% endfor %}">
       {% for b in bar %}{% if b.count %}<span class="k-{{ b.key }}" style="width:{{ b.pct }}%"></span>{% endif %}{% endfor %}
@@ -108,8 +109,25 @@ ol, ul { padding-left:20px; }
 
 <section id="findings" aria-labelledby="h-findings">
   <h2 id="h-findings">Findings</h2>
+  {% set incon = report.executions|selectattr("verdict", "equalto", "INCONCLUSIVE")|list %}
+  {% if incon %}
+  <div class="banner" role="status">
+    <p><strong>{{ incon|length }} scenario{{ "" if incon|length == 1 else "s" }} inconclusive.</strong>
+      Inconclusive is not evidence that a behaviour is absent.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th scope="col">Scenario</th><th scope="col">Status</th><th scope="col">Reason</th></tr></thead>
+      <tbody>{% for e in incon %}<tr><td class="mono">{{ e.scenario }}</td><td>{{ e.status }}</td><td>{{ e.inconclusive_reason }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+  {% endif %}
   {% if not report.findings %}
-    <p>No violations observed in {{ report.totals.executed }} executed scenario{{ "" if report.totals.executed == 1 else "s" }}.</p>
+    {% if incon %}
+    <p>No CONFIRMED findings.</p>
+    {% elif report.totals.NOT_REPRODUCED %}
+    <p>No violations observed in {{ report.totals.NOT_REPRODUCED }} executed scenario{{ "" if report.totals.NOT_REPRODUCED == 1 else "s" }}.</p>
+    {% else %}
+    <p>No scenarios were executed.</p>
+    {% endif %}
   {% else %}
   <div class="tablewrap"><table>
     <thead><tr><th scope="col">Severity</th><th scope="col">Verdict</th><th scope="col">Finding</th><th scope="col">Failed checks</th></tr></thead>

@@ -151,8 +151,26 @@ def test_inconclusive_run_renders(
         headers={**auth_headers, "Idempotency-Key": uuid.uuid4().hex},
     ).json()
     html = client.get(f"{API}/runs/{run['id']}/report?format=html", headers=auth_headers).text
-    assert "No violations observed" in html  # no finding for a timed-out execution
-    assert "INCONCLUSIVE 1" in html
+    # A timed-out execution must never read as "no violations observed".
+    assert "No violations observed" not in html
+    assert "1 scenario inconclusive" in html and "not evidence that a behaviour is absent" in html
+    assert "INCONCLUSIVE 1" in html and "timeout" in html
+
+
+def test_cancelled_run_shows_not_run(
+    app: FastAPI, client: TestClient, auth_headers: dict[str, str], demo: dict[str, Any]
+) -> None:
+    app.state.worker.submit = lambda run_id: None
+    run = client.post(
+        f"{API}/runs",
+        json={"target_id": demo["target"], "contract_id": demo["contract"], "suite": "demo"},
+        headers={**auth_headers, "Idempotency-Key": uuid.uuid4().hex},
+    ).json()
+    client.post(f"{API}/runs/{run['id']}/cancel", headers=auth_headers)
+    app.state.service.process_run(run["id"])
+    html = client.get(f"{API}/runs/{run['id']}/report?format=html", headers=auth_headers).text
+    assert "Executed 0" in html and "not run 10" in html
+    assert "No violations observed" not in html
 
 
 def test_retest_section(

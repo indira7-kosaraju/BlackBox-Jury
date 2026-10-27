@@ -145,3 +145,35 @@ def test_fix_and_retest_via_cli(
 
 def test_retest_requires_exactly_one_source(wired: TestClient) -> None:
     assert runner.invoke(cli.app, ["retest"]).exit_code != 0
+
+
+def test_cli_retries_get_on_429(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
+    monkeypatch.setattr(cli, "get_settings", lambda: settings)
+    monkeypatch.setattr(cli.time, "sleep", lambda _: None)
+    replies = iter([(429, {"error": {"code": "rate_limited"}}), (200, {"ok": True})])
+    monkeypatch.setattr(cli, "_http", lambda *a, **k: next(replies))
+    assert cli._api("http://127.0.0.1:8000", "GET", "/runs/x") == {"ok": True}
+
+
+def test_serve_uses_settings_host_and_port(
+    monkeypatch: pytest.MonkeyPatch, settings: Settings
+) -> None:
+    from blackbox_jury import serve
+
+    captured: dict[str, Any] = {}
+    monkeypatch.setattr(serve, "get_settings", lambda: settings.model_copy(update={"port": 8767}))
+    monkeypatch.setattr(serve.uvicorn, "run", lambda app, **kw: captured.update(app=app, **kw))
+    serve.main()
+    assert (
+        captured["host"] == "127.0.0.1" and captured["port"] == 8767 and captured["factory"] is True
+    )
+
+
+def test_cli_default_api_follows_settings(
+    monkeypatch: pytest.MonkeyPatch, settings: Settings
+) -> None:
+    monkeypatch.setattr(cli, "get_settings", lambda: settings.model_copy(update={"port": 8767}))
+    seen: list[str] = []
+    monkeypatch.setattr(cli, "_http", lambda method, url, *a, **k: (seen.append(url), (200, {}))[1])
+    cli._api("", "GET", "/runs")
+    assert seen == ["http://127.0.0.1:8767/api/v1/runs"]

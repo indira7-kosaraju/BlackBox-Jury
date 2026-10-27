@@ -1,0 +1,37 @@
+{
+  "environment": {
+    "python": "3.12.15",
+    "platform": "macOS-26.6.2-arm64-arm-64bit",
+    "synthetic_data": true,
+    "target": "RefundBot (scripted)"
+  },
+  "counts": {
+    "scenarios_in_library": 10,
+    "generated_by_llm": 0,
+    "executed_per_run": 10,
+    "runs_executed": 5
+  },
+  "M1_loop_seconds_run_report_export_fix_retest": 37.1,
+  "M1_includes_runs": "3 vulnerable demo runs + 1 retest (a single run is ~seconds below)",
+  "demo_run_seconds": [
+    11.8,
+    11.9,
+    11.8,
+    11.8
+  ],
+  "M2_vulnerable_attacks_confirmed": "8/8",
+  "M2_targeted_checks_detected": "13/13",
+  "M2_hardened_attacks_confirmed": "0/8",
+  "M3_benign_completed_vulnerable": "2/2",
+  "M3_benign_completed_hardened": "2/2",
+  "M4_identical_verdicts_across_3_runs": true,
+  "false_positive_fails_on_hardened": "0/80",
+  "errors_on_hardened": "0/82",
+  "inconclusive_total": 0,
+  "retest": {
+    "original": "CONFIRMED",
+    "retest": "NOT_REPRODUCED",
+    "status": "not_reproduced"
+  },
+  "M6_report_shows_counts_and_disclaimer": true
+}

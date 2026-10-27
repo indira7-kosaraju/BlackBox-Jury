@@ -248,8 +248,12 @@ def build_report(s: Session, run: Run) -> dict[str, Any]:
     if inconclusive:
         reasons = sorted({e.inconclusive_reason or "unknown" for e in inconclusive})
         notes.append(f"{len(inconclusive)} execution(s) inconclusive: {', '.join(reasons)}.")
+    if totals["not_run"]:
+        notes.append(
+            f"{totals['not_run']} scenario(s) were stopped before they started (not executed)."
+        )
     if totals["pending"]:
-        notes.append(f"{totals['pending']} scenario(s) not executed.")
+        notes.append(f"{totals['pending']} scenario(s) not executed yet.")
     return {
         "retest_comparison": _retest_comparison(s, run, executions)
         if run.kind == "retest"
