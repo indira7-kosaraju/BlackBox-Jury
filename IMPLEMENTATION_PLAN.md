@@ -107,6 +107,7 @@
   - schemas with unknown tools or checks are rejected;
   - oversized or malformed YAML is rejected.
 - **Acceptance:** the loader returns 10 valid scenarios, each with its applicable checks.
+- **Done (Phase 4):** the scenario field `targets` lists the checks a scenario is designed to trip; every enabled check still runs on every execution. Scenarios can override only order notes, faults and approvals. Payloads are checked against the image-side parsers. Coverage and detection limits are recorded in `docs/LIMITATIONS.md`.
 
 ## Phase 5: Sandboxed execution and evidence collection · **Must** · ~5 h
 - **Goal:** `DockerSandboxRunner` and the collector, following ARCHITECTURE §7.

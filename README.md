@@ -6,7 +6,7 @@ Blackbox Jury is a security-first testing system for tool-using AI agents. It ru
 
 > Results reflect only the scenarios executed. Blackbox Jury does not establish that any agent is secure.
 
-**Status:** Phase 3 (task contract and deterministic checks). See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+**Status:** Phase 4 (scenario schema and curated scenarios). See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 ## Project documents
 
@@ -19,6 +19,7 @@ Blackbox Jury is a security-first testing system for tool-using AI agents. It ru
 | [API.md](API.md) | REST API |
 | [AGENTS.md](AGENTS.md) | Mandatory rules for contributors and AI coding agents |
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | 48-hour build plan |
+| [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | **Known detection and coverage limitations.** Read this before interpreting any result. |
 
 ## Local setup
 
