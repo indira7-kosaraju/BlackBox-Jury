@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 
 from blackbox_jury.api.errors import ApiError, error_response, install_error_handlers
-from blackbox_jury.api.routes import catalog, health, runs
+from blackbox_jury.api.routes import catalog, health, regression, runs
 from blackbox_jury.core.config import Settings, get_settings
 from blackbox_jury.core.ids import new_id
 from blackbox_jury.core.logging import configure_logging, request_id_var
@@ -121,6 +121,7 @@ def create_app(
     app.include_router(health.router, prefix=API_PREFIX)
     app.include_router(catalog.router, prefix=API_PREFIX)
     app.include_router(runs.router, prefix=API_PREFIX)
+    app.include_router(regression.router, prefix=API_PREFIX)
     return app
 
 

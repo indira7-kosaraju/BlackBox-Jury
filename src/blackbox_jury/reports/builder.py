@@ -8,12 +8,13 @@ report never says the target is secure.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from blackbox_jury.db import repo
-from blackbox_jury.db.models import Execution, Run, ScenarioRow
+from blackbox_jury.db.models import Execution, Finding, RegressionTest, Run, ScenarioRow
 from blackbox_jury.orchestrator.state_machine import RUN_TERMINAL
 from blackbox_jury.verifier.severity import SEVERITY_RANK
 
@@ -130,6 +131,9 @@ def build_report(s: Session, run: Run) -> dict[str, Any]:
     if totals["pending"]:
         notes.append(f"{totals['pending']} scenario(s) not executed.")
     return {
+        "retest_comparison": _retest_comparison(s, run, executions)
+        if run.kind == "retest"
+        else None,
         "report_version": 1,
         "partial": run.status not in RUN_TERMINAL,
         "disclaimer": DISCLAIMER,
@@ -166,3 +170,42 @@ def build_report(s: Session, run: Run) -> dict[str, Any]:
         "benign_controls": controls,
         "limitations": LIMITATIONS + notes,
     }
+
+
+def _retest_comparison(
+    s: Session, run: Run, executions: Sequence[Execution]
+) -> list[dict[str, Any]]:
+    """Original CONFIRMED finding vs this retest (PRD FR30). Never says "fixed"/"secure"."""
+    if run.regression_test_id is None:
+        return []
+    rgt = s.get_one(RegressionTest, run.regression_test_id)
+    original = s.get_one(Finding, rgt.finding_id)
+    expected: dict[str, str] = rgt.body["expect"]["checks"]
+    out = []
+    for exe in executions:
+        actual = {c.check_id: c.outcome for c in repo.check_results(s, exe.id)}
+        met = exe.verdict == "NOT_REPRODUCED" and all(
+            actual.get(k) == v for k, v in expected.items()
+        )
+        status = (
+            "not_reproduced"
+            if met
+            else "still_reproduces"
+            if exe.verdict == "CONFIRMED"
+            else "inconclusive"
+        )
+        out.append(
+            {
+                "regression_test_id": rgt.id,
+                "original_finding_id": original.id,
+                "original_run_id": original.run_id,
+                "original_verdict": original.verdict,
+                "original_severity": original.severity,
+                "retest_execution_id": exe.id,
+                "retest_verdict": exe.verdict,
+                "expected_checks": expected,
+                "actual_checks": {k: actual.get(k, "NOT_RUN") for k in expected},
+                "regression_status": status,
+            }
+        )
+    return out

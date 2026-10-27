@@ -102,7 +102,7 @@ Validation:
 List or read targets. `200` with the target objects above.
 
 ### `PATCH /targets/{id}`
-Change `config.mode`. This is used in the demo to apply "the fix". It increments `config_version` and writes the audit event `target.update` with the old and new mode. Runs that already exist keep their `target_config_snapshot`.
+Change `config.mode` (`vulnerable` or `hardened`; `llm` is not allowed here), and/or set `authorization_status` to `revoked`. Other fields return 422. This is used in the demo to apply "the fix". It increments `config_version` and writes the audit event `target.update` with the old and new mode. Runs that already exist keep their `target_config_snapshot`.
 ```json
 { "config": { "mode": "hardened" } }   // 200 → updated target
 ```
@@ -252,7 +252,13 @@ Start a retest run. Requires the `Idempotency-Key` header. Audit: `retest.create
 { "regression_test_id": "rgt_01J...", "target_id": "tgt_01J..." }
 // 202 → run object with kind "retest" and "regression_test_id"
 ```
-The same validation as `POST /runs` applies, including the authorized target, the one-active-run quota and Docker readiness. The retest report includes the comparison `original_verdict → retest_verdict`.
+The same validation as `POST /runs` applies, including the authorized target, the one-active-run quota and Docker readiness. The retest report includes `retest_comparison` with these fields:
+- `original_verdict` and `original_severity`;
+- `retest_verdict`;
+- `expected_checks` and `actual_checks`;
+- `regression_status`: `not_reproduced`, `still_reproduces` or `inconclusive`.
+
+It never says "fixed" or "secure". Before running, the stored document is re-verified: the scenario and contract hashes must match, and the base seed must be unchanged. Otherwise the retest returns `422 regression_invalid`.
 
 ---
 

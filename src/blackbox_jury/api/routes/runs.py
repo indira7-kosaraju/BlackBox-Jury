@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Header, Query, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 
-from blackbox_jury.api.deps import DB, DefaultLimited, RunCreateLimited
+from blackbox_jury.api.deps import DB, DefaultLimited, Principal, RunCreateLimited
 from blackbox_jury.api.errors import ApiError
 from blackbox_jury.api.schemas import IdempotencyKey, RunCreate
 from blackbox_jury.core.logging import request_id_var
 from blackbox_jury.db import repo
-from blackbox_jury.db.models import Run, ScenarioRow
+from blackbox_jury.db.models import Contract, Run, ScenarioRow, Target
+from blackbox_jury.db.session import Database
 from blackbox_jury.evidence.collector import canonical_json, sha256_hex
 from blackbox_jury.reports.builder import build_report, execution_view
 from blackbox_jury.scenarios.loader import SUITES, ScenarioError, validate_against
@@ -43,16 +46,24 @@ def run_out(s: Any, run: Run) -> dict[str, Any]:
     }
 
 
-@router.post("/runs", status_code=202)
-def create_run(
-    body: RunCreate,
+Resolver = Callable[[Session], tuple[Target, Contract, list[ScenarioRow], str, str | None]]
+
+
+def start_run(
+    *,
     request: Request,
-    principal: RunCreateLimited,
-    db: DB,
-    idempotency_key: Annotated[IdempotencyKey, Header(alias="Idempotency-Key")],
+    principal: Principal,
+    db: Database,
+    idempotency_key: str,
+    request_sha: str,
+    resolve: Resolver,
 ) -> JSONResponse:
+    """Shared, guarded run creation for standard runs and retests.
+
+    Order: idempotency -> target authorized + image allowlisted -> scenarios valid
+    against contract/seed -> one active run -> Docker ready -> insert + audit -> enqueue.
+    """
     state = request.app.state
-    request_sha = sha256_hex(canonical_json(body.model_dump(mode="json")))
     with _create_lock:
         with db.session() as s:
             existing = repo.find_run_by_key(s, principal.project_id, idempotency_key)
@@ -64,7 +75,7 @@ def create_run(
                         "Idempotency-Key was used with a different request.",
                     )
                 return JSONResponse(status_code=200, content=run_out(s, existing))
-            target = repo.get_target(s, principal.project_id, body.target_id)
+            target, contract_row, scenario_rows, kind, regression_test_id = resolve(s)
             if target.authorization_status != "authorized":
                 raise ApiError(
                     422, "target_not_authorized", "Target is not authorized for testing."
@@ -73,30 +84,9 @@ def create_run(
                 raise ApiError(
                     422, "image_not_allowed", "Target image is no longer on the allowlist."
                 )
-            contract_row = repo.get_contract(s, principal.project_id, body.contract_id)
-            contract = repo.contract_model(contract_row)
-            if body.suite is not None:
-                if body.suite == "demo":
-                    rows = [
-                        r
-                        for r in repo.list_scenarios(s, principal.project_id)
-                        if r.source == "curated"
-                    ]
-                    latest: dict[str, ScenarioRow] = {}
-                    for r in rows:
-                        if r.key not in latest or r.version > latest[r.key].version:
-                            latest[r.key] = r
-                    scenario_rows = [latest[k] for k in sorted(latest)]
-                else:
-                    scenario_rows = repo.latest_scenarios_by_keys(
-                        s, principal.project_id, SUITES[body.suite]
-                    )
-            else:
-                scenario_rows = repo.scenarios_by_ids(
-                    s, principal.project_id, list(body.scenario_ids or ())
-                )
             if not 1 <= len(scenario_rows) <= 25:
                 raise ApiError(422, "invalid_request", "A run needs between 1 and 25 scenarios.")
+            contract = repo.contract_model(contract_row)
             for row in scenario_rows:
                 try:
                     validate_against(repo.scenario_model(row), contract, state.base_seed)
@@ -122,12 +112,14 @@ def create_run(
                 idempotency_key=idempotency_key,
                 request_sha256=request_sha,
                 actor=principal.actor,
+                kind=kind,
+                regression_test_id=regression_test_id,
             )
             repo.audit(
                 s,
                 project=principal.project_id,
                 actor=principal.actor,
-                action="run.create",
+                action="retest.create" if kind == "retest" else "run.create",
                 request_id=request_id_var.get() or "",
                 entity_type="run",
                 entity_id=run.id,
@@ -136,11 +128,47 @@ def create_run(
                     "mode": target.config.get("mode"),
                     "contract": f"{contract_row.name}@v{contract_row.version}",
                     "scenarios": len(scenario_rows),
+                    "regression_test_id": regression_test_id,
                 },
             )
             content = run_out(s, run)
     state.worker.submit(run.id)
     return JSONResponse(status_code=202, content=content)
+
+
+@router.post("/runs", status_code=202)
+def create_run(
+    body: RunCreate,
+    request: Request,
+    principal: RunCreateLimited,
+    db: DB,
+    idempotency_key: Annotated[IdempotencyKey, Header(alias="Idempotency-Key")],
+) -> JSONResponse:
+    def resolve(s: Session) -> tuple[Target, Contract, list[ScenarioRow], str, str | None]:
+        target = repo.get_target(s, principal.project_id, body.target_id)
+        contract_row = repo.get_contract(s, principal.project_id, body.contract_id)
+        if body.suite == "demo":
+            latest: dict[str, ScenarioRow] = {}
+            for r in repo.list_scenarios(s, principal.project_id):
+                if r.source == "curated" and (
+                    r.key not in latest or r.version > latest[r.key].version
+                ):
+                    latest[r.key] = r
+            rows = [latest[k] for k in sorted(latest)]
+        elif body.suite is not None:
+            rows = repo.latest_scenarios_by_keys(s, principal.project_id, SUITES[body.suite])
+        else:
+            rows = repo.scenarios_by_ids(s, principal.project_id, list(body.scenario_ids or ()))
+        return target, contract_row, rows, "standard", None
+
+    return start_run(
+        request=request,
+        principal=principal,
+        db=db,
+        idempotency_key=idempotency_key,
+        request_sha=sha256_hex(canonical_json(body.model_dump(mode="json"))),
+        resolve=resolve,
+    )
 
 
 @router.get("/runs")

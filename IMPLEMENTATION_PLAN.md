@@ -207,6 +207,12 @@
   - a retest against a vulnerable target gives CONFIRMED;
   - the comparison links are correct.
 - **Acceptance:** the demo steps 6–7 (PRD §18) work from the CLI.
+- **Done (Phase 8):**
+  - `PATCH /targets` (change mode or revoke), with audit before/after values.
+  - Tamper-evident `bbj-regression/1` export, idempotent and CONFIRMED-only.
+  - `POST /retests` through the same guarded run creation, with `retest_comparison` in the report.
+  - CLI commands `export`, `retest` and `target set-mode`.
+  - 8 committed regressions from a real Docker run: each passes against the hardened target and still fails against the vulnerable one.
 
 ## Phase 9: Minimal demo UI and report · **Must** (HTML report) / **Stretch** (dashboard) · ~4 h
 - **Goal:** the DESIGN.md report.

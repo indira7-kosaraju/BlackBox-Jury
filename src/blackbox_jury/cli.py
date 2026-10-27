@@ -247,5 +247,101 @@ def cancel(
         _fail(exc)
 
 
+target_app = typer.Typer(no_args_is_help=True, help="Target commands")
+app.add_typer(target_app, name="target")
+
+
+@target_app.command("set-mode")
+def target_set_mode(
+    name: str,
+    mode: Annotated[str, typer.Argument(help="vulnerable | hardened")],
+    yes: Annotated[bool, typer.Option("--yes")] = False,
+    api: ApiOpt = DEFAULT_API,
+) -> None:
+    """Change a target's mode (the demo "fix"). Recorded in the audit log."""
+    if mode not in ("vulnerable", "hardened"):
+        raise typer.BadParameter("mode must be vulnerable or hardened")
+    if not yes and not typer.confirm(
+        "This changes the target configuration for future runs. Continue?"
+    ):
+        raise typer.Exit(1)
+    try:
+        targets = {t["name"]: t for t in _api(api, "GET", "/targets")["items"]}
+        if name not in targets:
+            raise typer.BadParameter(f"unknown target {name!r}")
+        updated = _api(api, "PATCH", f"/targets/{targets[name]['id']}", {"config": {"mode": mode}})
+        _echo(
+            f"target {name}: mode {updated['config']['mode']} (config v{updated['config_version']})"
+        )
+    except ApiCallError as exc:
+        _fail(exc)
+
+
+@app.command("export")
+def export_regression(
+    finding_id: str,
+    out: Annotated[Path | None, typer.Option()] = None,
+    api: ApiOpt = DEFAULT_API,
+) -> None:
+    """Export a CONFIRMED finding as a portable regression test (bbj-regression/1)."""
+    try:
+        row = _api(api, "POST", f"/findings/{finding_id}/regression-test")
+    except ApiCallError as exc:
+        _fail(exc)
+        return
+    path = out or Path("regressions") / f"{row['id']}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(row["body"], indent=2, sort_keys=True) + "\n")
+    _echo(f"regression test {row['id']} -> {path}")
+
+
+@app.command()
+def retest(
+    regression_test: Annotated[
+        str | None, typer.Option("--regression-test", help="Regression test id")
+    ] = None,
+    file: Annotated[Path | None, typer.Option("--file", help="Exported regression JSON")] = None,
+    target: Annotated[str, typer.Option()] = "refundbot",
+    api: ApiOpt = DEFAULT_API,
+    as_json: JsonOpt = False,
+) -> None:
+    """Re-run an exported regression test against an authorized target."""
+    if (regression_test is None) == (file is None):
+        raise typer.BadParameter("give exactly one of --regression-test or --file")
+    rgt_id = regression_test or str(json.loads(file.read_text())["regression_test_id"])  # type: ignore[union-attr]
+    try:
+        targets = {t["name"]: t for t in _api(api, "GET", "/targets")["items"]}
+        if target not in targets:
+            raise typer.BadParameter(f"unknown target {target!r}")
+        created = _api(
+            api,
+            "POST",
+            "/retests",
+            {"regression_test_id": rgt_id, "target_id": targets[target]["id"]},
+            {"Idempotency-Key": uuid.uuid4().hex},
+        )
+        while True:
+            status = _api(api, "GET", f"/runs/{created['id']}")
+            if status["status"] in TERMINAL:
+                break
+            time.sleep(1)
+        report = _api(api, "GET", f"/runs/{created['id']}/report")
+    except (ApiCallError, typer.BadParameter) as exc:
+        _fail(exc)
+        return
+    if as_json:
+        _echo(json.dumps(report["retest_comparison"]))
+        return
+    for c in report["retest_comparison"] or []:
+        _echo(
+            f"original {c['original_verdict']} ({c['original_severity']}) -> "
+            f"retest {c['retest_verdict']}: "
+            f"{c['regression_status'].upper()}"
+        )
+        for check, outcome in c["actual_checks"].items():
+            _echo(f"  {check}: expected PASS, got {outcome}")
+    _echo(report["disclaimer"])
+
+
 if __name__ == "__main__":
     app()

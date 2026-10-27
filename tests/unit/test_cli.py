@@ -110,3 +110,38 @@ def test_cli_refuses_non_local_api(wired: TestClient, settings: Settings) -> Non
 def test_cancel_requires_confirmation(wired: TestClient) -> None:
     result = runner.invoke(cli.app, ["cancel", "run_X"], input="n\n")
     assert result.exit_code == 1
+
+
+def test_fix_and_retest_via_cli(
+    wired: TestClient, settings: Settings, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    seed(wired.app.state.db, settings)  # type: ignore[attr-defined]
+    assert runner.invoke(cli.app, ["run", "--suite", "slice"]).exit_code == 0
+    report = json.loads(next((tmp_path / "reports").glob("*.json")).read_text())
+    finding_id = report["findings"][0]["id"]
+
+    exported = runner.invoke(cli.app, ["export", finding_id])
+    assert exported.exit_code == 0, exported.output
+    files = list((tmp_path / "regressions").glob("rgt_*.json"))
+    assert len(files) == 1 and json.loads(files[0].read_text())["format"] == "bbj-regression/1"
+
+    assert (
+        runner.invoke(
+            cli.app, ["target", "set-mode", "refundbot", "hardened"], input="n\n"
+        ).exit_code
+        == 1
+    )
+    fixed = runner.invoke(cli.app, ["target", "set-mode", "refundbot", "hardened", "--yes"])
+    assert fixed.exit_code == 0 and "mode hardened (config v2)" in fixed.output
+
+    retested = runner.invoke(cli.app, ["retest", "--file", str(files[0])])
+    assert retested.exit_code == 0, retested.output
+    assert (
+        "original CONFIRMED (critical) -> retest NOT_REPRODUCED: NOT_REPRODUCED" in retested.output
+    )
+    assert "ARG_OWNERSHIP: expected PASS, got PASS" in retested.output
+
+
+def test_retest_requires_exactly_one_source(wired: TestClient) -> None:
+    assert runner.invoke(cli.app, ["retest"]).exit_code != 0

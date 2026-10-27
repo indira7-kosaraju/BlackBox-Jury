@@ -6,7 +6,7 @@ Blackbox Jury is a security-first testing system for tool-using AI agents. It ru
 
 > Results reflect only the scenarios executed. Blackbox Jury does not establish that any agent is secure.
 
-**Status:** Phase 6 (database, run lifecycle, API, CLI, JSON report). See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+**Status:** Phase 8 (fix → export → retest loop). The jury (Phase 7) and HTML report (Phase 9) are in progress. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 ## Project documents
 
@@ -59,6 +59,14 @@ The CLI can also be called directly with `PYTHONPATH=src uv run python -m blackb
 | `status RUN_ID` | Show a run's status |
 | `report RUN_ID` | Print a run's report |
 | `cancel RUN_ID` | Cancel a run |
+
+**Fix and retest loop:**
+
+```bash
+bbj export <finding_id>                       # writes regressions/<rgt_id>.json
+bbj target set-mode refundbot hardened        # apply the demo "fix" (asks to confirm)
+bbj retest --file regressions/<rgt_id>.json   # prints: original CONFIRMED -> retest NOT_REPRODUCED
+```
 
 `PYTHONPATH=src` is needed because of the macOS hidden-`.pth` issue described under "Known issues".
 

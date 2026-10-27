@@ -24,6 +24,7 @@ from blackbox_jury.db.models import (
     Execution,
     Finding,
     Project,
+    RegressionTest,
     Run,
     ScenarioRow,
     Target,
@@ -135,6 +136,65 @@ def find_target(s: Session, project: str, name: str) -> Target | None:
 
 def list_targets(s: Session, project: str) -> Sequence[Target]:
     return s.scalars(select(Target).where(Target.project_id == project).order_by(Target.name)).all()
+
+
+def update_target(
+    s: Session, project: str, target_id: str, *, mode: str | None, revoke: bool
+) -> tuple[Target, dict[str, Any]]:
+    """Change mode and/or revoke authorization; bumps ``config_version`` on mode change."""
+    target = get_target(s, project, target_id)
+    before = {
+        "mode": target.config.get("mode"),
+        "authorization_status": target.authorization_status,
+        "config_version": target.config_version,
+    }
+    if mode is not None and mode != target.config.get("mode"):
+        target.config = {**target.config, "mode": mode}
+        target.config_version += 1
+    if revoke:
+        target.authorization_status = "revoked"
+    target.updated_at = utcnow()
+    s.flush()
+    return target, before
+
+
+def create_regression_test(
+    s: Session, *, project: str, regression_test_id: str, finding_id: str, body: dict[str, Any]
+) -> RegressionTest:
+    row = RegressionTest(
+        id=regression_test_id,
+        project_id=project,
+        finding_id=finding_id,
+        body=body,
+        body_sha256=sha256_hex(canonical_json(body)),
+        created_at=utcnow(),
+    )
+    s.add(row)
+    s.flush()
+    return row
+
+
+def regression_for_finding(s: Session, finding_id: str) -> RegressionTest | None:
+    return s.scalar(select(RegressionTest).where(RegressionTest.finding_id == finding_id))
+
+
+def get_regression_test(s: Session, project: str, regression_test_id: str) -> RegressionTest:
+    row = s.scalar(
+        select(RegressionTest).where(
+            RegressionTest.id == regression_test_id, RegressionTest.project_id == project
+        )
+    )
+    if row is None:
+        raise NotFoundError("regression_test")
+    return row
+
+
+def find_contract_version(s: Session, project: str, name: str, version: int) -> Contract | None:
+    return s.scalar(
+        select(Contract).where(
+            Contract.project_id == project, Contract.name == name, Contract.version == version
+        )
+    )
 
 
 # -- contracts & scenarios (immutable, idempotent by content hash) --------------------------
