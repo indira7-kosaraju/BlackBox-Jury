@@ -72,6 +72,21 @@ bbj retest --file reports/out/regressions/<rgt_id>.json   # prints: original CON
 
 `PYTHONPATH=src` is needed because of the macOS hidden-`.pth` issue described under "Known issues".
 
+## Web UI
+
+An interactive command center (React + Vite + TypeScript, in `frontend/`) for running tests and inspecting evidence. It requires Node 20+ and npm.
+
+```bash
+make ui            # once: install and build frontend/dist
+make run           # then open http://127.0.0.1:8000/ui and paste BBJ_API_TOKEN from .env
+```
+
+- The UI is served by the API itself (same origin, strict CSP, no external requests). The token is kept only in that browser tab (`sessionStorage`).
+- Pages: Overview, Targets (with contract viewer and editor), Test Lab, Test Runs, Evidence Explorer, Jury Findings, Regression Tests and Settings.
+- Every number on screen comes from the API. The 3D Evidence Core reflects real run status. With reduced motion or no WebGL, a static version is shown instead.
+- **Demo mode** ("Explore demo data" on the sign-in screen) works without a server. It shows data recorded from a real sandboxed run, labelled `DEMO DATA` on every screen. Starting a run there replays a recorded run on a timer, labelled `SIMULATED REPLAY`. Re-record it with `make ui-fixture` (requires Docker).
+- For UI development: `make run` in one terminal, `make ui-dev` in another, then open http://127.0.0.1:5173/ui/ (Vite proxies `/api` to the server).
+
 ## Configuration
 
 All configuration comes from environment variables, or from `.env`, which is git-ignored. See [.env.example](.env.example).
@@ -107,7 +122,9 @@ All configuration comes from environment variables, or from `.env`, which is git
 | `make typecheck` | mypy (strict) over `src/` |
 | `make test` | pytest, excluding Docker-marked tests |
 | `make test-docker` | sandbox integration tests (requires Docker) |
-| `make run` | start the API on `127.0.0.1:8000` |
+| `make run` | start the API on `127.0.0.1:8000` (also serves the web UI at `/ui` once built) |
+| `make ui` / `make ui-dev` / `make ui-test` | build the web UI / run the Vite dev server / UI typecheck and tests |
+| `make ui-fixture` | re-record the UI demo fixture from a real sandboxed run (requires Docker) |
 | `make images` | build the sandbox images `bbj-gateway:0.1.0` and `bbj-refundbot:0.1.0` (requires Docker) |
 | `make seed` / `make demo` | Seed the demo data and run the demo suite through the API (`make run` must be running) |
 | `make qa` | Measure the PRD success metrics against the real sandbox (writes `docs/qa/qa_metrics.json`) |

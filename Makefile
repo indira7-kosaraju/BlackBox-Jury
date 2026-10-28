@@ -1,4 +1,4 @@
-.PHONY: install check lint format format-check typecheck test test-docker run images sandbox-smoke seed demo qa clean-demo clean-images
+.PHONY: ui ui-dev ui-test ui-fixture install check lint format format-check typecheck test test-docker run images sandbox-smoke seed demo qa clean-demo clean-images
 
 install:
 	uv sync
@@ -26,6 +26,20 @@ test-docker:
 # Host/port come from settings (environment or .env); default 127.0.0.1:8000.
 run:
 	PYTHONPATH=src uv run python -m blackbox_jury.serve
+
+# Web UI (React + Vite). `make ui` builds frontend/dist, which `make run` serves at /ui.
+ui:
+	cd frontend && npm ci && npm run build
+
+ui-dev:
+	cd frontend && npm run dev
+
+ui-test:
+	cd frontend && npm run typecheck && npm test
+
+# Re-record the UI demo fixture from a real sandboxed run (requires Docker and images).
+ui-fixture:
+	PYTHONPATH=src uv run python scripts/export_ui_demo_fixture.py
 
 # Sandbox images (stdlib-only, base pinned by digest). Requires Docker.
 IMAGE_TAG ?= 0.1.0

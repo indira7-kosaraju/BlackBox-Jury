@@ -1,0 +1,55 @@
+/* Design tokens — DESIGN.md §11. Colour semantics are fixed across the app:
+   cyan = active system, blue = navigation, violet = model analysis,
+   red = CONFIRMED violation, amber = INCONCLUSIVE / warning. */
+:root {
+  --bg: #070a12;
+  --bg-2: #0b1120;
+  --panel: #101827;
+  --panel-2: #141e31;
+  --line: #1d2a42;
+  --line-strong: #2a3a58;
+
+  --cyan: #42e8f5;
+  --cyan-dim: rgba(66, 232, 245, 0.14);
+  --blue: #5488ff;
+  --violet: #a78bfa;
+  --violet-dim: rgba(167, 139, 250, 0.14);
+  --red: #ff4567;
+  --red-dim: rgba(255, 69, 103, 0.14);
+  --amber: #ffbf69;
+  --amber-dim: rgba(255, 191, 105, 0.14);
+  --teal: #5fd4a6; /* NOT_REPRODUCED: muted, not celebratory */
+  --teal-dim: rgba(95, 212, 166, 0.12);
+
+  --text: #edf4ff;
+  --text-2: #8c9bb5;
+  --text-3: #5d6b84;
+
+  --font-ui: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-head: "Space Grotesk", "Inter Variable", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --glow-cyan: 0 0 0 1px rgba(66, 232, 245, 0.35), 0 0 24px rgba(66, 232, 245, 0.12);
+
+  --sidebar-w: 248px;
+  --topbar-h: 56px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur: 180ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur: 0ms;
+  }
+}

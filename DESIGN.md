@@ -141,7 +141,7 @@ The team approved a richer visual identity **for the interactive web app only**.
 
 **Layout:**
 - Left sidebar: brand mark, navigation, sandbox status.
-- Compact top bar: page title, target, a `LOCAL SANDBOX` badge.
+- Compact top bar: page title, a live-run indicator (only while a run is actually active, from `GET /runs`), a `LOCAL SANDBOX` badge.
 - Responsive workspace.
 - Pages: Overview, Targets, Test Lab, Test Runs, Evidence Explorer, Jury Findings, Regression Tests, Settings.
 
@@ -172,15 +172,18 @@ Glow is restrained: active elements only, never every border.
 - A translucent core (the target agent) with five orbital rings: scenarios, execution, evidence, verification, jury.
 - Ring and colour states are **derived only from API data**:
   - run and execution status drive which stage is active;
-  - verdict totals drive the final colour: red if anything was CONFIRMED, amber if anything was INCONCLUSIVE, cyan otherwise;
-  - the jury ring is dim when the jury is not run.
+  - verdict totals drive the nucleus colour: red if anything was CONFIRMED, amber if anything was INCONCLUSIVE or the run failed or timed out, teal when every execution completed and nothing reproduced, grey when there is no verdict yet;
+  - the jury ring is dashed/dim (`skipped`) when the jury did not run;
+  - it animates only while a run is live; a finished run is drawn still.
+- Implementation: `frontend/src/lib/pipeline.ts` (`deriveCoreState`) is the single mapping from API data to visual state, and is unit-tested.
 - It is lazy-loaded, pauses when hidden, and has a static SVG fallback when WebGL is unavailable or the user prefers reduced motion.
 - It is never the only place information appears.
 
 **Demo mode:**
 - A recorded dataset captured from a real sandbox run (`frontend/src/demo/fixture.json`).
 - Every screen shows a persistent `DEMO DATA — recorded run` banner, and a replayed run is labelled `SIMULATED REPLAY`.
-- Demo and live data are never mixed.
+- Starting a run or retest in demo mode replays a recorded run on a timer, revealing recorded executions one by one. Every other write (cancel, target changes, exports, contracts) is refused with `demo_read_only`.
+- Demo and live data are never mixed. Regenerate the fixture with `scripts/export_ui_demo_fixture.py` (requires Docker).
 
 **Security:**
 - The UI is served same-origin from `/ui`, with a strict CSP: scripts only from the same origin and no external connections.
