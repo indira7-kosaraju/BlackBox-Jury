@@ -261,6 +261,25 @@ It never says "fixed" or "secure". Before running, the stored document is re-ver
 
 ---
 
+## 7b. Read-only listings for the web UI (added 2026-10-28)
+
+All of these require auth, are project-scoped, never change state, and use the default rate limit.
+
+| Endpoint | Returns |
+|---|---|
+| `GET /findings?limit=&verdict=&severity=` | Newest first. Each item: `id`, `run_id`, `execution_id`, `title`, `category`, `verdict`, `severity`, `failed_checks`, `scenario_key`, `target`, `target_mode`, `regression_test_id` (or null), `created_at`. `limit` is 1–200 (default 50). |
+| `GET /regression-tests` | Newest first. Each item: `id`, `finding_id`, `title`, `scenario_key`, `original_verdict`, `original_severity`, `original_run_id`, `expected_checks`, `body_sha256`, `created_at`, and `retests` (newest first: `run_id`, `status`, `verdict`, `target_mode`, `config_version`, `finished_at`). |
+| `GET /audit-events?limit=` | Recent real audit events (`id`, `action`, `actor`, `entity_type`, `entity_id`, `details` (redacted), `created_at`). |
+| `GET /settings` | Non-secret effective configuration: `app`, `sandbox` (images, isolation, limits, timeouts), `jury` (enabled, provider, model, whether credentials are configured — never the key), `limits`, `retention`. |
+
+**Web UI.** `GET /ui` and `GET /ui/{path}` serve the built app from `BBJ_UI_DIST_DIR` (default `frontend/dist`).
+- They are public, because the app asks for the token itself; all data still requires the token.
+- Responses carry a strict same-origin CSP.
+- Unknown paths return `index.html`, so client-side routes work.
+- Files outside the dist directory are never served.
+- If the UI is not built, the response is `404` with "Run `make ui`".
+- `GET /` redirects to `/ui/` when the UI is built.
+
 ## 8. Endpoint summary
 
 | Method | Path | Purpose | Audit |
@@ -286,3 +305,5 @@ It never says "fixed" or "secure". Before running, the stored document is re-ver
 | POST | /findings/{id}/regression-test | Export a test | ✓ |
 | GET | /regression-tests/{id} | Download a test | – |
 | POST | /retests | Start a retest | ✓ |
+| GET | /findings, /regression-tests, /audit-events, /settings | Read-only listings for the web UI | – |
+| GET | /ui, /ui/{path} | Built web app (public shell) | – |

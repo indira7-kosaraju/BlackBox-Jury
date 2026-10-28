@@ -74,7 +74,7 @@ These commands run in terminal B, using the `bbj` alias from step 5. The export 
 FID=$(python3 -c "import json,glob,os;r=json.load(open(max(glob.glob('reports/out/*.json'),key=os.path.getmtime)));print(next(f['id'] for f in r['findings'] if f['execution']['scenario']['key']=='pi_order_note_refund'))")
 bbj export "$FID"
 bbj target set-mode refundbot hardened --yes
-bbj retest --file "$(ls -t regressions/rgt_*.json | head -1)"
+bbj retest --file "$(ls -t reports/out/regressions/rgt_*.json | head -1)"
 ```
 
 The target stays hardened afterwards. Before rehearsing again, either run `make clean-demo` and then `make seed`, or switch it back with `bbj target set-mode refundbot vulnerable --yes`.

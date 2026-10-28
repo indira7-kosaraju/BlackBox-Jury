@@ -25,3 +25,8 @@ reports/out/
 .DS_Store
 .idea/
 .vscode/
+
+# Frontend (web UI)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/

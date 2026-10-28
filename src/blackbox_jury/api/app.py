@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 
 from blackbox_jury.api.errors import ApiError, error_response, install_error_handlers
-from blackbox_jury.api.routes import catalog, health, regression, runs
+from blackbox_jury.api.routes import browse, catalog, health, regression, runs, ui
 from blackbox_jury.core.config import Settings, get_settings
 from blackbox_jury.core.ids import new_id
 from blackbox_jury.core.logging import configure_logging, request_id_var
@@ -111,7 +111,7 @@ def create_app(
             request_id_var.reset(token)
         response.headers["X-Request-Id"] = request_id
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Cache-Control"] = "no-store"
+        response.headers.setdefault("Cache-Control", "no-store")
         return response
 
     install_error_handlers(app)
@@ -130,6 +130,8 @@ def create_app(
     app.include_router(catalog.router, prefix=API_PREFIX)
     app.include_router(runs.router, prefix=API_PREFIX)
     app.include_router(regression.router, prefix=API_PREFIX)
+    app.include_router(browse.router, prefix=API_PREFIX)
+    app.include_router(ui.router)
     return app
 
 

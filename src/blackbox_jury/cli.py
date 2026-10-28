@@ -306,7 +306,9 @@ def export_regression(
     except ApiCallError as exc:
         _fail(exc)
         return
-    path = out or Path("regressions") / f"{row['id']}.json"
+    # Ad-hoc exports go to the git-ignored reports folder; regressions/ holds the
+    # committed suite (one file per demo scenario, see regressions/README.md).
+    path = out or REPORTS_DIR / "regressions" / f"{row['id']}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(row["body"], indent=2, sort_keys=True) + "\n")
     _echo(f"regression test {row['id']} -> {path}")

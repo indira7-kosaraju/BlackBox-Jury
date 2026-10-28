@@ -123,7 +123,7 @@ def test_fix_and_retest_via_cli(
 
     exported = runner.invoke(cli.app, ["export", finding_id])
     assert exported.exit_code == 0, exported.output
-    files = list((tmp_path / "regressions").glob("rgt_*.json"))
+    files = list((tmp_path / "reports" / "regressions").glob("rgt_*.json"))
     assert len(files) == 1 and json.loads(files[0].read_text())["format"] == "bbj-regression/1"
 
     assert (

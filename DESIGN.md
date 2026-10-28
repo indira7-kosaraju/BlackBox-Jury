@@ -119,7 +119,7 @@ Severity is shown as a text chip (`CRITICAL`, `HIGH`, `MEDIUM` or `LOW`). Next t
 - Respect `prefers-reduced-motion`. The report has no animations anyway.
 - All agent and evidence text is HTML-escaped, and long tokens wrap (`overflow-wrap: anywhere`).
 
-## 10. Stretch: interactive dashboard
+## 10. Stretch: interactive dashboard (superseded by §11)
 
 This is built only after the IMPLEMENTATION_PLAN must-haves are done. It reuses the tokens, components and provenance rules above:
 - runs list;
@@ -128,3 +128,60 @@ This is built only after the IMPLEMENTATION_PLAN must-haves are done. It reuses 
 - new run form, with target picker limited to authorized targets and a confirmation dialog.
 
 There are no extra visualizations beyond those in section 1.
+
+## 11. Web app: Evidence Core command center (approved 2026-10-28)
+
+The team approved a richer visual identity **for the interactive web app only**. The static HTML report (§1–§9) keeps its calm, forensic style. §1's "no glow / animation" rule does not apply to the web app, but every honesty rule still does.
+
+**Rules that still apply:**
+- Provenance labels everywhere: VERIFIED, AGENT CLAIM, MODEL ANALYSIS.
+- No invented statistics, scores, live events or "secure" badges.
+- Severity is never shown by colour alone.
+- Jury roles are shown exactly as the backend runs them: one reviewer plus one counter-reviewer.
+
+**Layout:**
+- Left sidebar: brand mark, navigation, sandbox status.
+- Compact top bar: page title, target, a `LOCAL SANDBOX` badge.
+- Responsive workspace.
+- Pages: Overview, Targets, Test Lab, Test Runs, Evidence Explorer, Jury Findings, Regression Tests, Settings.
+
+**Colour semantics (tokens):**
+
+| Token | Value | Use |
+|---|---|---|
+| background | `#070A12` | Page background |
+| secondary background | `#0B1120` | Secondary surfaces |
+| panel | `#101827` | Panels and cards |
+| cyan | `#42E8F5` | Active systems |
+| blue | `#5488FF` | Navigation and links |
+| violet | `#A78BFA` | Model analysis |
+| red | `#FF4567` | CONFIRMED |
+| amber | `#FFBF69` | INCONCLUSIVE |
+| main text | `#EDF4FF` | Body text |
+| secondary text | `#8C9BB5` | Secondary text |
+
+Glow is restrained: active elements only, never every border.
+
+**Typography:**
+- Space Grotesk for headings.
+- Inter for UI text.
+- JetBrains Mono for ids, tool calls and timestamps.
+- Fonts are self-hosted, so nothing is loaded from external servers.
+
+**The Evidence Core (3D):**
+- A translucent core (the target agent) with five orbital rings: scenarios, execution, evidence, verification, jury.
+- Ring and colour states are **derived only from API data**:
+  - run and execution status drive which stage is active;
+  - verdict totals drive the final colour: red if anything was CONFIRMED, amber if anything was INCONCLUSIVE, cyan otherwise;
+  - the jury ring is dim when the jury is not run.
+- It is lazy-loaded, pauses when hidden, and has a static SVG fallback when WebGL is unavailable or the user prefers reduced motion.
+- It is never the only place information appears.
+
+**Demo mode:**
+- A recorded dataset captured from a real sandbox run (`frontend/src/demo/fixture.json`).
+- Every screen shows a persistent `DEMO DATA — recorded run` banner, and a replayed run is labelled `SIMULATED REPLAY`.
+- Demo and live data are never mixed.
+
+**Security:**
+- The UI is served same-origin from `/ui`, with a strict CSP: scripts only from the same origin and no external connections.
+- The API token is entered once and kept in `sessionStorage`, so it is cleared when the tab closes. It is never placed in URLs or logs.

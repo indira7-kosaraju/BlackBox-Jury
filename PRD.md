@@ -230,7 +230,7 @@ Rules:
 
 ## 11. Pages and screens
 
-**[DECISION D3 — approved]** The MVP has no interactive dashboard. The user-facing surfaces are:
+**[DECISION D3 — approved; amended 2026-10-28]** The original MVP had no interactive dashboard. **Amendment:** after the MVP was complete, the team approved an interactive web app (`frontend/`, served at `/ui`), specified in DESIGN.md §11. It uses only the existing API plus four read-only endpoints. The CLI and the static report remain. The original user-facing surfaces were:
 1. the REST API (FastAPI, with auto-generated OpenAPI docs);
 2. a small CLI (`bbj run`, `bbj report`, `bbj export`, `bbj retest`) for the demo;
 3. a static **HTML report** per run.
@@ -350,7 +350,7 @@ All demo results are labelled **synthetic**.
 |---|---|---|
 | D1 | Jury is "should have", after the deterministic loop | Approved |
 | D2 | Single local API token, no auth provider | Approved |
-| D3 | API + CLI + static HTML report; no dashboard in MVP | Approved |
+| D3 | API + CLI + static HTML report; web app added after the MVP (DESIGN.md §11) | Approved (amended) |
 | D4 | Scripted deterministic mock target as demo default | Approved |
 | D5 | LLM provider and API key availability | Resolved: default none; Anthropic opt-in |
 | D6 | Docker sandbox, no host fallback | Approved (Docker Desktop must be started) |

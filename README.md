@@ -65,9 +65,9 @@ The CLI can also be called directly with `PYTHONPATH=src uv run python -m blackb
 **Fix and retest loop:**
 
 ```bash
-bbj export <finding_id>                       # writes regressions/<rgt_id>.json
+bbj export <finding_id>                       # writes reports/out/regressions/<rgt_id>.json
 bbj target set-mode refundbot hardened        # apply the demo "fix" (asks to confirm)
-bbj retest --file regressions/<rgt_id>.json   # prints: original CONFIRMED -> retest NOT_REPRODUCED
+bbj retest --file reports/out/regressions/<rgt_id>.json   # prints: original CONFIRMED -> retest NOT_REPRODUCED
 ```
 
 `PYTHONPATH=src` is needed because of the macOS hidden-`.pth` issue described under "Known issues".
@@ -96,6 +96,7 @@ All configuration comes from environment variables, or from `.env`, which is git
 | `BBJ_DATABASE_URL` | no | `sqlite:///./data/bbj.db` | SQLite only |
 | `BBJ_SEED_PATH` | no | `seeds/synthetic_store.json` | Synthetic base seed |
 | `BBJ_CONTRACTS_DIR` | no | `contracts` | Contract YAML files loaded by `bbj seed` |
+| `BBJ_UI_DIST_DIR` | no | `frontend/dist` | Built web UI, served at `/ui` (`make ui`) |
 
 ## Developer commands
 

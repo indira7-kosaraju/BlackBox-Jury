@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     database_url: str = Field(default="sqlite:///./data/bbj.db", pattern=r"^sqlite:///")
     seed_path: Path = Path("seeds/synthetic_store.json")
     contracts_dir: Path = Path("contracts")
+    # Built web UI (``make ui``); served at /ui when present.
+    ui_dist_dir: Path = Path("frontend/dist")
 
     @field_validator("api_token")
     @classmethod

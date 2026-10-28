@@ -529,6 +529,54 @@ def finding_for_execution(s: Session, execution_id: str) -> Finding | None:
     return s.scalar(select(Finding).where(Finding.execution_id == execution_id))
 
 
+# -- read-only listings for the web UI ---------------------------------------------------
+
+
+def list_findings(
+    s: Session,
+    project: str,
+    limit: int,
+    verdict: str | None = None,
+    severity: str | None = None,
+) -> Sequence[tuple[Finding, Run, ScenarioRow]]:
+    q = (
+        select(Finding, Run, ScenarioRow)
+        .join(Run, Finding.run_id == Run.id)
+        .join(Execution, Finding.execution_id == Execution.id)
+        .join(ScenarioRow, Execution.scenario_id == ScenarioRow.id)
+        .where(Run.project_id == project)
+    )
+    if verdict:
+        q = q.where(Finding.verdict == verdict)
+    if severity:
+        q = q.where(Finding.severity == severity)
+    rows = s.execute(q.order_by(Finding.id.desc()).limit(limit)).all()
+    return [(r[0], r[1], r[2]) for r in rows]
+
+
+def list_regression_tests(s: Session, project: str) -> Sequence[RegressionTest]:
+    return s.scalars(
+        select(RegressionTest)
+        .where(RegressionTest.project_id == project)
+        .order_by(RegressionTest.id.desc())
+    ).all()
+
+
+def retest_runs(s: Session, regression_test_id: str) -> Sequence[Run]:
+    return s.scalars(
+        select(Run).where(Run.regression_test_id == regression_test_id).order_by(Run.id.desc())
+    ).all()
+
+
+def list_audit_events(s: Session, project: str, limit: int) -> Sequence[AuditEvent]:
+    return s.scalars(
+        select(AuditEvent)
+        .where(AuditEvent.project_id == project)
+        .order_by(AuditEvent.id.desc())
+        .limit(limit)
+    ).all()
+
+
 # -- cursors -------------------------------------------------------------------------------
 
 

@@ -18,7 +18,8 @@ from tests.unit.sandbox_images.conftest import base_seed
 
 pytestmark = pytest.mark.docker
 ROOT = Path(__file__).resolve().parents[2]
-FILES = sorted((ROOT / "regressions").glob("*.json"))
+# The committed suite is named by scenario key; ad-hoc exports (rgt_*.json) are not part of it.
+FILES = sorted(p for p in (ROOT / "regressions").glob("*.json") if not p.name.startswith("rgt_"))
 GATEWAY, AGENT = "bbj-gateway:0.1.0", "bbj-refundbot:0.1.0"
 
 
